@@ -1,0 +1,1 @@
+wrap around logic still has issues.  for example, a pawn is on main path at position 58 (cell 0,2), and draws 2.  should be able to move to pos 60 (cell 0,0) which in this case would be the start of a wrap around

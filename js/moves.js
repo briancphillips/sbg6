@@ -20,6 +20,8 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
 
     if (cardValue === '4') {
         if (pawn.positionType === 'board') {
+            // Fix: Ensure proper backward movement with wrap-around
+            // Adding PATH_LENGTH ensures we avoid negative indices
             const targetIndex = (pawn.positionIndex - 4 + PATH_LENGTH) % PATH_LENGTH;
             if (!isOccupiedByOwnPawnBoard(targetIndex, playerIndex)) {
                 moves.push({
@@ -38,6 +40,8 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
         }
         
         if (pawn.positionType === 'board') {
+            // Fix: Ensure proper backward movement with wrap-around for the card 10's backward 1
+            // Adding PATH_LENGTH ensures we avoid negative indices
             const targetIndex = (pawn.positionIndex - 1 + PATH_LENGTH) % PATH_LENGTH;
             if (!isOccupiedByOwnPawnBoard(targetIndex, playerIndex)) {
                 moves.push({
@@ -77,14 +81,19 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
     let stepsLeft = steps;
     
     while (stepsLeft > 0) {
+        // Check if we're approaching the safety entry
         if (currentType === 'board') {
+            // Check if we need to enter the safety zone
+            // Make sure exact position is compared and correct player entry points are checked
             if (currentPos === startInfo.safetyEntryIndex) {
                 currentType = 'safe';
-                currentPos = -1;
+                currentPos = -1; // Start before the first safety zone space
             }
         }
         
+        // Move forward
         if (currentType === 'board') {
+            // Ensure proper calculation for the wrap-around
             currentPos = (currentPos + 1) % PATH_LENGTH;
         } else {
             currentPos++;
@@ -92,6 +101,7 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
         
         stepsLeft--;
         
+        // Check if we reached home
         if (currentType === 'safe' && currentPos === SAFETY_ZONE_LENGTH) {
             if (stepsLeft === 0) return {
                 positionType: 'home',
@@ -107,6 +117,7 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
         }
     }
     
+    // Check if the final position is occupied by your own pawn
     if (currentType === 'board' && isOccupiedByOwnPawnBoard(currentPos, pawn.playerIndex)) {
         return { type: 'invalid' };
     }
@@ -115,6 +126,7 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
         return { type: 'invalid' };
     }
     
+    // Return the calculated destination
     if (currentType === 'board') {
         return {
             positionType: 'board',

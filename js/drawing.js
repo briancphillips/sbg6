@@ -159,13 +159,13 @@ export function drawBoard() {
     ctx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
 
     // Draw outer board margin/border
-    ctx.strokeStyle = '#a09383';
-    ctx.lineWidth = BOARD_MARGIN * 0.8;
-    ctx.strokeRect(BOARD_MARGIN / 2, BOARD_MARGIN / 2, BOARD_SIZE - BOARD_MARGIN, BOARD_SIZE - BOARD_MARGIN);
+    // ctx.strokeStyle = '#a09383';
+    // ctx.lineWidth = BOARD_MARGIN * 0.8;
+    // ctx.strokeRect(BOARD_MARGIN / 2, BOARD_MARGIN / 2, BOARD_SIZE - BOARD_MARGIN, BOARD_SIZE - BOARD_MARGIN);
     
-    ctx.strokeStyle = '#d4c8bc';
-    ctx.lineWidth = BOARD_MARGIN * 0.2;
-    ctx.strokeRect(BOARD_MARGIN * 0.9, BOARD_MARGIN * 0.9, BOARD_SIZE - BOARD_MARGIN * 1.8, BOARD_SIZE - BOARD_MARGIN * 1.8);
+    // ctx.strokeStyle = '#d4c8bc';
+    // ctx.lineWidth = BOARD_MARGIN * 0.2;
+    // ctx.strokeRect(BOARD_MARGIN * 0.9, BOARD_MARGIN * 0.9, BOARD_SIZE - BOARD_MARGIN * 1.8, BOARD_SIZE - BOARD_MARGIN * 1.8);
 
     // --- Layer 1: Draw Base Track & Corner Squares (Opaque White) ---
     const trackColor = '#ffffff';
