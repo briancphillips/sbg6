@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorry! Game Clone</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* Enhanced Styling (same as previous version) */
+        body { font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); margin: 0; padding: 2rem 1rem; box-sizing: border-box; }
+        canvas { background-color: #FEFDFB; border: 4px solid #8c7a6b; border-radius: 12px; box-shadow: 0 6px 12px rgba(0,0,0,0.15); max-width: 100%; aspect-ratio: 1 / 1; cursor: default; display: block; }
+        canvas.clickable { cursor: pointer; }
+        .game-title { font-family: 'Press Start 2P', cursive; font-size: 2.5rem; margin-bottom: 1.5rem; color: #d9534f; text-shadow: 3px 3px #a1a1aa; }
+        .game-controls button { font-family: 'Press Start 2P', cursive; font-size: 0.8rem; padding: 12px 24px; margin: 8px; border-radius: 8px; border: none; border-bottom: 4px solid transparent; cursor: pointer; transition: all 0.15s ease-out; box-shadow: 0 4px 6px rgba(0,0,0,0.1); color: white; text-shadow: 1px 1px 1px rgba(0,0,0,0.2); }
+        .game-controls button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 6px 8px rgba(0,0,0,0.15); }
+        .game-controls button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-bottom-width: 2px; }
+        .game-controls button:disabled { background-color: #a0aec0; border-color: #718096; cursor: not-allowed; opacity: 0.7; box-shadow: none; }
+        #drawCardButton { background: linear-gradient(to bottom, #5bc0de, #46b8da); border-bottom-color: #31b0d5; }
+        #drawCardButton:active:not(:disabled) { background: linear-gradient(to top, #5bc0de, #46b8da); }
+        #resetButton { background: linear-gradient(to bottom, #f0ad4e, #eea236); border-bottom-color: #ec971f; }
+        #resetButton:active:not(:disabled) { background: linear-gradient(to top, #f0ad4e, #eea236); }
+        .info-panel { background-color: rgba(255, 255, 255, 0.9); backdrop-filter: blur(5px); padding: 20px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); text-align: center; min-width: 280px; border: 1px solid rgba(0,0,0,0.1); }
+        .info-panel p { margin-bottom: 0.75rem; font-size: 1rem; color: #4a5568; }
+        .info-panel p:last-child { margin-bottom: 0; }
+        .player-indicator { display: inline-block; width: 24px; height: 24px; border-radius: 50%; margin-left: 10px; vertical-align: middle; border: 2px solid rgba(0,0,0,0.3); box-shadow: inset 0 1px 2px rgba(0,0,0,0.2); }
+        .highlight-move { fill: rgba(76, 175, 80, 0.4); stroke: #388E3C; stroke-width: 2.5; }
+        .highlight-target { stroke: #D32F2F; stroke-width: 5px; filter: brightness(1.1); }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <h1 class="game-title">Sorry!</h1>
+
+    <div class="flex flex-col md:flex-row items-center md:items-start gap-8 w-full max-w-5xl px-4">
+        <div class="flex-grow flex justify-center w-full md:w-auto">
+             <canvas id="sorryCanvas" width="600" height="600"></canvas>
+        </div>
+        <div class="flex flex-col items-center gap-6 w-full md:w-auto shrink-0">
+             <div id="infoPanel" class="info-panel w-full">
+                <p class="text-lg font-semibold">Current Player: <span id="currentPlayerName">Red</span><span id="currentPlayerColor" class="player-indicator"></span></p>
+                <p>Card Drawn: <span id="cardDrawn" class="font-mono text-lg">-</span></p>
+                <p id="messageArea" class="mt-2 min-h-10 text-base text-indigo-700 font-medium flex items-center justify-center"></p>
+                <p id="winMessage" class="mt-2 min-h-6 text-xl font-bold text-green-600"></p>
+            </div>
+            <div class="game-controls flex flex-col items-center">
+                <button id="drawCardButton">Draw Card</button>
+                <button id="resetButton" class="mt-4 hidden">Play Again?</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('sorryCanvas');
+        const ctx = canvas.getContext('2d');
+        // ... (other element getters remain the same) ...
+        const infoPanel = document.getElementById('infoPanel');
+        const currentPlayerNameEl = document.getElementById('currentPlayerName');
+        const currentPlayerColorEl = document.getElementById('currentPlayerColor');
+        const cardDrawnEl = document.getElementById('cardDrawn');
+        const messageAreaEl = document.getElementById('messageArea');
+        const winMessageEl = document.getElementById('winMessage');
+        const drawCardButton = document.getElementById('drawCardButton');
+        const resetButton = document.getElementById('resetButton');
+
+        // --- Game Constants ---
+        const BOARD_SIZE = canvas.width;
+        const GRID_SIZE = 16;
+        const SQUARE_SIZE = BOARD_SIZE / GRID_SIZE;
+        const PAWN_RADIUS = SQUARE_SIZE * 0.35;
+        const START_AREA_SIZE = SQUARE_SIZE * 4;
+        const HOME_AREA_SIZE = SQUARE_SIZE * 3;
+        const PATH_LENGTH = 60;
+        const SAFETY_ZONE_LENGTH = 5;
+        const BOARD_MARGIN = SQUARE_SIZE * 0.25;
+
+        // --- Updated Home Coordinates ---
+        const PLAYERS = [
+             { name: 'Red',    color: '#ef4444', startCoord: { x: 4 * SQUARE_SIZE, y: 4 * SQUARE_SIZE },  homeCoord: {x: 7.5 * SQUARE_SIZE, y: 2.5 * SQUARE_SIZE} },
+             { name: 'Blue',   color: '#3b82f6', startCoord: { x: 12 * SQUARE_SIZE, y: 4 * SQUARE_SIZE }, homeCoord: {x: 13.5 * SQUARE_SIZE, y: 7.5 * SQUARE_SIZE} },
+             { name: 'Yellow', color: '#eab308', startCoord: { x: 12 * SQUARE_SIZE, y: 12 * SQUARE_SIZE }, homeCoord: {x: 7.5 * SQUARE_SIZE, y: 13.5 * SQUARE_SIZE} },
+             { name: 'Green',  color: '#22c55e', startCoord: { x: 4 * SQUARE_SIZE, y: 12 * SQUARE_SIZE }, homeCoord: {x: 2.5 * SQUARE_SIZE, y: 7.5 * SQUARE_SIZE} }
+        ];
+        const PAWNS_PER_PLAYER = 4;
+        const BOARD_PATH = [];
+        const SAFETY_ZONES = [[], [], [], []];
+        const PLAYER_START_INFO = [ { exitIndex: 4, safetyEntryIndex: 1 }, { exitIndex: 19, safetyEntryIndex: 16 }, { exitIndex: 34, safetyEntryIndex: 31 }, { exitIndex: 49, safetyEntryIndex: 46 } ];
+        const SLIDE_INFO = { 1: { len: 4, endBoardIndex: 5, colorIndex: 0 }, 9: { len: 5, endBoardIndex: 14, colorIndex: 0 }, 16: { len: 4, endBoardIndex: 20, colorIndex: 1 }, 24: { len: 5, endBoardIndex: 29, colorIndex: 1 }, 31: { len: 4, endBoardIndex: 35, colorIndex: 2 }, 39: { len: 5, endBoardIndex: 44, colorIndex: 2 }, 46: { len: 4, endBoardIndex: 50, colorIndex: 3 }, 54: { len: 5, endBoardIndex: (54+5) % PATH_LENGTH, colorIndex: 3 } };
+
+        // --- Game State ---
+        let gameState = { players: [], deck: [], discardPile: [], currentPlayerIndex: 0, currentCard: null, selectedPawn: null, selectablePawns: [], validMoves: [], targetableOpponents: [], message: "", gameOver: false, currentAction: null, splitData: { firstPawn: null, firstMoveValue: 0, secondPawn: null } };
+
+        // --- Helper Functions ---
+        // ... (All helper functions remain the same as the previous version) ...
+        function getPixelCoordsForPawn(pawn) { if (!pawn) return null; let coords = null; try { if (pawn.positionType === 'start') { const playerDetails = PLAYERS[pawn.playerIndex]; const angle = (pawn.id / PAWNS_PER_PLAYER) * Math.PI * 2 + pawn.playerIndex * Math.PI / 2; const radiusOffset = START_AREA_SIZE * 0.25; coords = { x: playerDetails.startCoord.x + Math.cos(angle) * radiusOffset, y: playerDetails.startCoord.y + Math.sin(angle) * radiusOffset }; } else if (pawn.positionType === 'board') { if (pawn.positionIndex >= 0 && pawn.positionIndex < BOARD_PATH.length) { coords = { x: BOARD_PATH[pawn.positionIndex].pixelX, y: BOARD_PATH[pawn.positionIndex].pixelY }; } else { console.error(`Invalid board index ${pawn.positionIndex} for pawn ${pawn.id}`); } } else if (pawn.positionType === 'safe') { if (pawn.positionIndex >= 0 && pawn.positionIndex < SAFETY_ZONES[pawn.playerIndex].length) { coords = { x: SAFETY_ZONES[pawn.playerIndex][pawn.positionIndex].pixelX, y: SAFETY_ZONES[pawn.playerIndex][pawn.positionIndex].pixelY }; } else { console.error(`Invalid safe index ${pawn.positionIndex} for pawn ${pawn.id}`); } } else if (pawn.positionType === 'home') { const playerDetails = PLAYERS[pawn.playerIndex]; const angle = (pawn.id / PAWNS_PER_PLAYER) * Math.PI * 2 + pawn.playerIndex * Math.PI / 1.5; const radiusOffset = HOME_AREA_SIZE * 0.25; coords = { x: playerDetails.homeCoord.x + Math.cos(angle) * radiusOffset, y: playerDetails.homeCoord.y + Math.sin(angle) * radiusOffset }; } } catch (e) { console.error("Error in getPixelCoordsForPawn:", e, "Pawn:", pawn); } if (!coords) { console.error("Could not get coordinates for pawn:", pawn); return { x: -100, y: -100 }; } return coords; }
+        function distSq(x1, y1, x2, y2) { return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2); }
+        function isClickOnPawn(clickX, clickY, pawn) { const coords = getPixelCoordsForPawn(pawn); if (!coords) return false; return distSq(clickX, clickY, coords.x, coords.y) <= PAWN_RADIUS * PAWN_RADIUS; }
+        function isClickOnSquare(clickX, clickY, squarePixelX, squarePixelY) { return distSq(clickX, clickY, squarePixelX, squarePixelY) <= (SQUARE_SIZE / 2) * (SQUARE_SIZE / 2); }
+        function getPawnAtBoardIndex(boardIndex) { for (const player of gameState.players) { for (const pawn of player.pawns) { if (pawn.positionType === 'board' && pawn.positionIndex === boardIndex) { return pawn; } } } return null; }
+        function getOwnPawnAtSafeZoneIndex(playerIndex, safeIndex) { if (safeIndex < 0 || safeIndex >= SAFETY_ZONE_LENGTH) return null; return gameState.players[playerIndex].pawns.find(pawn => pawn.positionType === 'safe' && pawn.positionIndex === safeIndex ); }
+        function isOccupiedByOpponent(targetBoardIndex, currentPlayerIndex) { const pawn = getPawnAtBoardIndex(targetBoardIndex); return pawn !== null && pawn.playerIndex !== currentPlayerIndex; }
+        function isOccupiedByOwnPawnBoard(targetBoardIndex, playerIndex) { const pawn = getPawnAtBoardIndex(targetBoardIndex); return pawn !== null && pawn.playerIndex === playerIndex; }
+        function isOccupiedByOwnPawnSafe(playerIndex, targetSafeIndex) { return getOwnPawnAtSafeZoneIndex(playerIndex, targetSafeIndex) !== null; }
+        function sendPawnToStart(pawn) { if (!pawn) return; console.log(`Sending Player ${pawn.playerIndex} Pawn ${pawn.id} back to Start!`); pawn.positionType = 'start'; pawn.positionIndex = -1; }
+        function getOpponentPawnsOnBoard(currentPlayerIndex) { const opponents = []; gameState.players.forEach((player, index) => { if (index !== currentPlayerIndex) { player.pawns.forEach(pawn => { if (pawn.positionType === 'board') { opponents.push(pawn); } }); } }); return opponents; }
+        function getPlayerPawnsInStart(playerIndex) { return gameState.players[playerIndex].pawns.filter(pawn => pawn.positionType === 'start'); }
+
+
+        // --- Initialization Functions ---
+        function initializeBoardPaths() { /* ... (same as before) ... */ console.log("Initializing board paths..."); BOARD_PATH.length = 0; SAFETY_ZONES.forEach(zone => zone.length = 0); function addSq(x, y) { BOARD_PATH.push({ gridX: x, gridY: y, pixelX: (x + 0.5) * SQUARE_SIZE, pixelY: (y + 0.5) * SQUARE_SIZE }); } for (let i = 0; i < 15; i++) addSq(i + 1, 0); for (let i = 0; i < 15; i++) addSq(15, i + 1); for (let i = 0; i < 15; i++) addSq(14 - i, 15); for (let i = 0; i < 15; i++) addSq(0, 14 - i); if (BOARD_PATH.length > 59) { BOARD_PATH[59] = { gridX: 0, gridY: 1, pixelX: 0.5 * SQUARE_SIZE, pixelY: 1.5 * SQUARE_SIZE }; } if (BOARD_PATH.length !== PATH_LENGTH) console.error(`Board path length mismatch! Expected ${PATH_LENGTH}, got ${BOARD_PATH.length}`); for(let i=0; i<SAFETY_ZONE_LENGTH; i++) SAFETY_ZONES[0].push({ gridX: i + 1, gridY: 1, pixelX: (i + 1.5) * SQUARE_SIZE, pixelY: (1.5) * SQUARE_SIZE }); for(let i=0; i<SAFETY_ZONE_LENGTH; i++) SAFETY_ZONES[1].push({ gridX: 14, gridY: i + 1, pixelX: (14.5) * SQUARE_SIZE, pixelY: (i + 1.5) * SQUARE_SIZE }); for(let i=0; i<SAFETY_ZONE_LENGTH; i++) SAFETY_ZONES[2].push({ gridX: 14 - i, gridY: 14, pixelX: (14.5 - i) * SQUARE_SIZE, pixelY: (14.5) * SQUARE_SIZE }); for(let i=0; i<SAFETY_ZONE_LENGTH; i++) SAFETY_ZONES[3].push({ gridX: 1, gridY: 14 - i, pixelX: (1.5) * SQUARE_SIZE, pixelY: (14.5 - i) * SQUARE_SIZE }); }
+
+        // --- Drawing Functions ---
+        function drawRoundedRect(x, y, width, height, radius, color, outline = null) { /* ... (same as before) ... */ ctx.fillStyle = color; ctx.strokeStyle = outline || color; ctx.lineWidth = outline ? 1 : 0; ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.lineTo(x + width - radius, y); ctx.quadraticCurveTo(x + width, y, x + width, y + radius); ctx.lineTo(x + width, y + height - radius); ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height); ctx.lineTo(x + radius, y + height); ctx.quadraticCurveTo(x, y + height, x, y + height - radius); ctx.lineTo(x, y + radius); ctx.quadraticCurveTo(x, y, x + radius, y); ctx.closePath(); ctx.fill(); if (outline) ctx.stroke(); }
+        function drawCircle(pixelX, pixelY, radius, color, outline = '#555', lineWidth = 2) { /* ... (same as before) ... */ ctx.fillStyle = color; ctx.strokeStyle = outline; ctx.lineWidth = lineWidth; ctx.beginPath(); ctx.arc(pixelX, pixelY, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+
+        // --- Updated drawBoard Function ---
+        function drawBoard() {
+            // Clear background
+            ctx.fillStyle = '#FEFDFB';
+            ctx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+
+            // Draw outer board margin/border
+            ctx.strokeStyle = '#a09383'; ctx.lineWidth = BOARD_MARGIN * 0.8;
+            ctx.strokeRect(BOARD_MARGIN / 2, BOARD_MARGIN / 2, BOARD_SIZE - BOARD_MARGIN, BOARD_SIZE - BOARD_MARGIN);
+            ctx.strokeStyle = '#d4c8bc'; ctx.lineWidth = BOARD_MARGIN * 0.2;
+            ctx.strokeRect(BOARD_MARGIN * 0.9, BOARD_MARGIN * 0.9, BOARD_SIZE - BOARD_MARGIN * 1.8, BOARD_SIZE - BOARD_MARGIN * 1.8);
+
+            // --- Layer 1: Draw Base Track & Corner Squares (Opaque White) ---
+            const trackColor = '#ffffff';
+            const outlineColor = '#e0e0e0';
+            // Draw main path squares from BOARD_PATH data
+            BOARD_PATH.forEach((sq, index) => {
+                 drawRoundedRect(sq.gridX * SQUARE_SIZE + 2, sq.gridY * SQUARE_SIZE + 2, SQUARE_SIZE - 4, SQUARE_SIZE - 4, 4, trackColor, outlineColor);
+            });
+            // Explicitly draw the four corner squares using the same style
+            drawRoundedRect(0 * SQUARE_SIZE + 2, 0 * SQUARE_SIZE + 2, SQUARE_SIZE - 4, SQUARE_SIZE - 4, 4, trackColor, outlineColor); // Top-left (0,0)
+            drawRoundedRect(15 * SQUARE_SIZE + 2, 0 * SQUARE_SIZE + 2, SQUARE_SIZE - 4, SQUARE_SIZE - 4, 4, trackColor, outlineColor); // Top-right (15,0)
+            drawRoundedRect(0 * SQUARE_SIZE + 2, 15 * SQUARE_SIZE + 2, SQUARE_SIZE - 4, SQUARE_SIZE - 4, 4, trackColor, outlineColor); // Bottom-left (0,15)
+            drawRoundedRect(15 * SQUARE_SIZE + 2, 15 * SQUARE_SIZE + 2, SQUARE_SIZE - 4, SQUARE_SIZE - 4, 4, trackColor, outlineColor); // Bottom-right (15,15)
+
+
+             // --- Layer 2: Draw Safety Zones ---
+             SAFETY_ZONES.forEach((zone, playerIndex) => {
+                 const color = PLAYERS[playerIndex].color + '55'; // Semi-transparent fill
+                 const zoneOutline = PLAYERS[playerIndex].color + '88'; // Stronger outline
+                 zone.forEach(sq => {
+                     drawRoundedRect(sq.gridX * SQUARE_SIZE + 2, sq.gridY * SQUARE_SIZE + 2, SQUARE_SIZE - 4, SQUARE_SIZE - 4, 4, color, zoneOutline);
+                 });
+             });
+
+            // --- Layer 3: Draw Slide Path Overlays & Start Markers ---
+            BOARD_PATH.forEach((sq, index) => {
+                 let slidePathColor = null;
+                 let isSlideStart = false;
+                 const slideAtStart = SLIDE_INFO[index]; // Check if this index is a slide START
+
+                 // Determine if this square is part of any slide's path
+                 for (const startIdx in SLIDE_INFO) {
+                     const s = SLIDE_INFO[startIdx];
+                     const endIdx = s.endBoardIndex;
+                     const startIndex = parseInt(startIdx);
+                     const pathColor = PLAYERS[s.colorIndex].color + '30'; // Very transparent path
+
+                     if (index === startIndex) { // Is it the start square?
+                         isSlideStart = true;
+                         slidePathColor = PLAYERS[s.colorIndex].color + '50'; // Slightly stronger for start square background
+                         break; // Found the definitive role for this square
+                     } else if (startIndex > endIdx) { // Wrap around case
+                         if (index > startIndex || index < endIdx) { slidePathColor = pathColor; break; }
+                     } else { // Normal case
+                         if (index > startIndex && index < endIdx) { slidePathColor = pathColor; break; }
+                     }
+                 }
+
+                 // Draw slide path overlay if applicable (on top of white base)
+                 if (slidePathColor) {
+                     drawRoundedRect(sq.gridX * SQUARE_SIZE + 2, sq.gridY * SQUARE_SIZE + 2, SQUARE_SIZE - 4, SQUARE_SIZE - 4, 4, slidePathColor);
+                 }
+
+                 // Draw slide START triangle indicator (on top of overlay)
+                 if (isSlideStart && slideAtStart) {
+                     ctx.fillStyle = PLAYERS[slideAtStart.colorIndex].color; // Opaque marker color
+                     ctx.beginPath();
+                     const cx = sq.pixelX; const cy = sq.pixelY; const sz = SQUARE_SIZE * 0.18;
+                     if (index < 15) { ctx.moveTo(cx - sz, cy + sz*1.5); ctx.lineTo(cx + sz, cy + sz*1.5); ctx.lineTo(cx, cy + sz*1.5 - sz*1.732); }
+                     else if (index < 30) { ctx.moveTo(cx - sz*1.5, cy - sz); ctx.lineTo(cx - sz*1.5, cy + sz); ctx.lineTo(cx - sz*1.5 + sz*1.732, cy); }
+                     else if (index < 45) { ctx.moveTo(cx - sz, cy - sz*1.5); ctx.lineTo(cx + sz, cy - sz*1.5); ctx.lineTo(cx, cy - sz*1.5 + sz*1.732); }
+                     else { ctx.moveTo(cx + sz*1.5, cy - sz); ctx.lineTo(cx + sz*1.5, cy + sz); ctx.lineTo(cx + sz*1.5 - sz*1.732, cy); }
+                     ctx.closePath();
+                     ctx.fill();
+                 }
+            });
+
+
+            // --- Layer 4: Draw Start and Home Areas ---
+            PLAYERS.forEach(player => { /* ... (Start Area drawing same as before) ... */ const startSize = START_AREA_SIZE * 0.9; const startX = player.startCoord.x - startSize / 2; const startY = player.startCoord.y - startSize / 2; drawRoundedRect(startX, startY, startSize, startSize, 10, player.color + '44', player.color); drawRoundedRect(startX + 5, startY + 5, startSize - 10, startSize - 10, 8, '#ffffffcc'); ctx.fillStyle = player.color; ctx.font = `bold ${SQUARE_SIZE * 0.55}px 'Press Start 2P'`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 3; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1; ctx.fillText('S', player.startCoord.x, player.startCoord.y); ctx.shadowColor = 'transparent'; });
+            PLAYERS.forEach(player => { /* ... (Home Area drawing same as before) ... */ drawCircle(player.homeCoord.x, player.homeCoord.y, HOME_AREA_SIZE / 2, player.color + '22', player.color + 'aa', 3); drawCircle(player.homeCoord.x, player.homeCoord.y, HOME_AREA_SIZE / 2.5, player.color + '66'); ctx.fillStyle = '#ffffff'; ctx.font = `bold ${SQUARE_SIZE * 0.4}px 'Press Start 2P'`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 2; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1; ctx.fillText('H', player.homeCoord.x, player.homeCoord.y); ctx.shadowColor = 'transparent'; });
+        }
+
+        // drawPawns uses the updated PLAYERS constant with corrected homeCoord via getPixelCoordsForPawn
+        function drawPawns() { /* ... (same drawing logic as before) ... */ gameState.players.forEach(player => { player.pawns.forEach(pawn => { const coords = getPixelCoordsForPawn(pawn); if (coords && coords.x > -10) { const color = player.details.color; try { drawCircle(coords.x, coords.y + 2, PAWN_RADIUS, 'rgba(0,0,0,0.15)'); const gradient = ctx.createRadialGradient(coords.x - PAWN_RADIUS*0.2, coords.y - PAWN_RADIUS*0.3, PAWN_RADIUS*0.1, coords.x, coords.y, PAWN_RADIUS); gradient.addColorStop(0, lightenColor(color, 30)); gradient.addColorStop(1, color); drawCircle(coords.x, coords.y, PAWN_RADIUS, gradient, darkenColor(color, 20), 2); const highlightOutlineWidth = 5; if (gameState.selectablePawns.includes(pawn)) { drawCircle(coords.x, coords.y, PAWN_RADIUS + highlightOutlineWidth*0.6, 'rgba(0,0,0,0)', '#ffcc00', highlightOutlineWidth); } if (gameState.selectedPawn === pawn) { drawCircle(coords.x, coords.y, PAWN_RADIUS + highlightOutlineWidth*0.6, 'rgba(0,0,0,0)', '#007bff', highlightOutlineWidth); } if (gameState.targetableOpponents.includes(pawn)) { drawCircle(coords.x, coords.y, PAWN_RADIUS + highlightOutlineWidth*0.6, 'rgba(0,0,0,0)', '#dc3545', highlightOutlineWidth); } } catch (e) { console.error("Error drawing pawn:", pawn, "at coords:", coords, e); drawCircle(coords.x, coords.y, PAWN_RADIUS, color, '#000000', 1); } } else if (coords.x <= -10) { console.warn(`Skipping drawing pawn ${pawn.id} due to off-screen coords.`); } }); }); }
+        // ... (adjustColor, lightenColor, darkenColor remain the same) ...
+        function adjustColor(hex, percent) { try { hex = hex.replace(/^#/, ''); if (hex.length === 3) { hex = hex.split('').map(c => c + c).join(''); } const num = parseInt(hex, 16); const amt = Math.round(2.55 * percent); let r = (num >> 16) + amt; let g = ((num >> 8) & 0x00FF) + amt; let b = (num & 0x0000FF) + amt; r = Math.min(255, Math.max(0, r)); g = Math.min(255, Math.max(0, g)); b = Math.min(255, Math.max(0, b)); return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`; } catch (e) { console.error("Error adjusting color:", hex, e); return hex; } }
+        function lightenColor(hex, percent) { return adjustColor(hex, Math.abs(percent)); }
+        function darkenColor(hex, percent) { return adjustColor(hex, -Math.abs(percent)); }
+        // ... (drawHighlights, updateUI remain the same) ...
+        function drawHighlights() { if (gameState.selectedPawn && gameState.validMoves.length > 0) { ctx.fillStyle = 'rgba(76, 175, 80, 0.4)'; ctx.strokeStyle = '#388E3C'; ctx.lineWidth = 2.5; gameState.validMoves.forEach(move => { if (move.type === 'move') { ctx.beginPath(); ctx.arc(move.pixelX, move.pixelY, SQUARE_SIZE * 0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); } }); } }
+        function updateUI() { const currentPlayer = PLAYERS[gameState.currentPlayerIndex]; currentPlayerNameEl.textContent = currentPlayer.name; currentPlayerColorEl.style.backgroundColor = currentPlayer.color; cardDrawnEl.textContent = gameState.currentCard ? gameState.currentCard.toString() : '-'; messageAreaEl.textContent = gameState.message; drawCardButton.disabled = gameState.currentCard !== null || gameState.gameOver; resetButton.classList.toggle('hidden', !gameState.gameOver); if (gameState.currentCard && !gameState.gameOver && (gameState.selectablePawns.length > 0 || gameState.validMoves.length > 0 || gameState.targetableOpponents.length > 0)) { canvas.classList.add('clickable'); } else { canvas.classList.remove('clickable'); } }
+
+
+        // --- Game Logic Functions ---
+        // ... (createDeck, shuffleDeck, initializeGame, getPossibleMovesForPawn, calculateForwardSteps, checkForAnyValidAction, handleCardDraw, checkWinCondition, executeMove, executeSorry, executeSwap, handleCanvasClick, nextTurn remain the same logic as V4) ...
+        function createDeck() { const deck = []; const cardCounts = { '1': 5, '2': 4, '3': 4, '4': 4, '5': 4, 'Sorry!': 4, '7': 4, '8': 4, '10': 4, '11': 4, '12': 4 }; for (const card in cardCounts) { for (let i = 0; i < cardCounts[card]; i++) { deck.push(card); } } return deck; }
+        function shuffleDeck(deck) { for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; } }
+        function initializeGame() { console.log("Initializing game..."); initializeBoardPaths(); gameState.players = PLAYERS.map((playerDetails, index) => { const pawns = []; for (let i = 0; i < PAWNS_PER_PLAYER; i++) { pawns.push({ id: i, playerIndex: index, positionType: 'start', positionIndex: -1 }); } return { index: index, details: playerDetails, pawns: pawns }; }); gameState.deck = createDeck(); shuffleDeck(gameState.deck); gameState.discardPile = []; gameState.currentPlayerIndex = 0; gameState.currentCard = null; gameState.selectedPawn = null; gameState.selectablePawns = []; gameState.validMoves = []; gameState.targetableOpponents = []; gameState.gameOver = false; gameState.currentAction = null; gameState.splitData = { firstPawn: null, firstMoveValue: 0, secondPawn: null }; gameState.message = `${PLAYERS[0].name}'s turn. Draw a card.`; winMessageEl.textContent = ""; console.log("Game Initialized"); drawGame(); updateUI(); }
+        function getPossibleMovesForPawn(pawn, card, stepsOverride = null) { const moves = []; const playerIndex = pawn.playerIndex; const startInfo = PLAYER_START_INFO[playerIndex]; const cardValue = stepsOverride !== null ? stepsOverride.toString() : card; const numericCardValue = parseInt(cardValue); if (cardValue === '4') { if (pawn.positionType === 'board') { const targetIndex = (pawn.positionIndex - 4 + PATH_LENGTH) % PATH_LENGTH; if (!isOccupiedByOwnPawnBoard(targetIndex, playerIndex)) { moves.push({ type: 'move', positionType: 'board', positionIndex: targetIndex, pixelX: BOARD_PATH[targetIndex].pixelX, pixelY: BOARD_PATH[targetIndex].pixelY }); } } } else if (cardValue === '10') { if (pawn.positionType === 'board' || pawn.positionType === 'safe') { const fwd10 = calculateForwardSteps(pawn, 10, startInfo); if (fwd10.type !== 'invalid') moves.push({ type: 'move', ...fwd10 }); } if (pawn.positionType === 'board') { const targetIndex = (pawn.positionIndex - 1 + PATH_LENGTH) % PATH_LENGTH; if (!isOccupiedByOwnPawnBoard(targetIndex, playerIndex)) { moves.push({ type: 'move', positionType: 'board', positionIndex: targetIndex, pixelX: BOARD_PATH[targetIndex].pixelX, pixelY: BOARD_PATH[targetIndex].pixelY }); } } } else if (!isNaN(numericCardValue) && numericCardValue > 0) { if (pawn.positionType === 'start' && (cardValue === '1' || cardValue === '2')) { const exitIndex = startInfo.exitIndex; if (!isOccupiedByOwnPawnBoard(exitIndex, playerIndex)) { moves.push({ type: 'move', positionType: 'board', positionIndex: exitIndex, pixelX: BOARD_PATH[exitIndex].pixelX, pixelY: BOARD_PATH[exitIndex].pixelY }); } } else if (pawn.positionType === 'board' || pawn.positionType === 'safe') { const fwdMove = calculateForwardSteps(pawn, numericCardValue, startInfo); if (fwdMove.type !== 'invalid') moves.push({ type: 'move', ...fwdMove }); } } return moves; }
+        function calculateForwardSteps(pawn, steps, startInfo) { let currentPos = pawn.positionIndex; let currentType = pawn.positionType; let stepsLeft = steps; while (stepsLeft > 0) { if (currentType === 'board') { if (currentPos === startInfo.safetyEntryIndex) { currentType = 'safe'; currentPos = -1; } } if (currentType === 'board') { currentPos = (currentPos + 1) % PATH_LENGTH; } else { currentPos++; } stepsLeft--; if (currentType === 'safe' && currentPos === SAFETY_ZONE_LENGTH) { if (stepsLeft === 0) return { positionType: 'home', positionIndex: -1, pixelX: PLAYERS[pawn.playerIndex].homeCoord.x, pixelY: PLAYERS[pawn.playerIndex].homeCoord.y }; else return { type: 'invalid' }; } if (currentType === 'safe' && currentPos > SAFETY_ZONE_LENGTH) { return { type: 'invalid' }; } } if (currentType === 'board' && isOccupiedByOwnPawnBoard(currentPos, pawn.playerIndex)) { return { type: 'invalid' }; } if (currentType === 'safe' && isOccupiedByOwnPawnSafe(pawn.playerIndex, currentPos)) { return { type: 'invalid' }; } if (currentType === 'board') { return { positionType: 'board', positionIndex: currentPos, pixelX: BOARD_PATH[currentPos].pixelX, pixelY: BOARD_PATH[currentPos].pixelY }; } else { return { positionType: 'safe', positionIndex: currentPos, pixelX: SAFETY_ZONES[pawn.playerIndex][currentPos].pixelX, pixelY: SAFETY_ZONES[pawn.playerIndex][currentPos].pixelY }; } }
+        function checkForAnyValidAction(playerIndex, card) { const player = gameState.players[playerIndex]; for (const pawn of player.pawns) { if (getPossibleMovesForPawn(pawn, card).length > 0) { return true; } } if (card === 'Sorry!') { const pawnsInStart = getPlayerPawnsInStart(playerIndex); const opponentsOnBoard = getOpponentPawnsOnBoard(playerIndex); return pawnsInStart.length > 0 && opponentsOnBoard.length > 0; } if (card === '11') { const pawnsOnBoard = player.pawns.filter(p => p.positionType === 'board'); const opponentsOnBoard = getOpponentPawnsOnBoard(playerIndex); return pawnsOnBoard.length > 0 && opponentsOnBoard.length > 0; } if (card === '7') { let movablePawns = 0; for (const pawn of player.pawns) { if (getPossibleMovesForPawn(pawn, '1').length > 0) { movablePawns++; if (movablePawns > 1) return true; } } } return false; }
+        function handleCardDraw(playerIndex, card) { gameState.selectablePawns = []; gameState.targetableOpponents = []; gameState.validMoves = []; gameState.currentAction = null; const player = gameState.players[playerIndex]; const canDoStandardMove = player.pawns.some(p => getPossibleMovesForPawn(p, card).length > 0); if (card === 'Sorry!') { const pawnsInStart = getPlayerPawnsInStart(playerIndex); const opponentsOnBoard = getOpponentPawnsOnBoard(playerIndex); if (pawnsInStart.length > 0 && opponentsOnBoard.length > 0) { gameState.selectablePawns = pawnsInStart; gameState.targetableOpponents = opponentsOnBoard; gameState.currentAction = 'select-sorry-pawn'; gameState.message = "Sorry! Select your pawn from Start."; } } else if (card === '11') { const pawnsOnBoard = player.pawns.filter(p => p.positionType === 'board'); const opponentsOnBoard = getOpponentPawnsOnBoard(playerIndex); const canSwap = pawnsOnBoard.length > 0 && opponentsOnBoard.length > 0; player.pawns.forEach(pawn => { if (getPossibleMovesForPawn(pawn, '11').length > 0 || (pawn.positionType === 'board' && canSwap)) { gameState.selectablePawns.push(pawn); } }); if (gameState.selectablePawns.length > 0) { gameState.currentAction = 'select-11-pawn'; gameState.message = "Draw 11: Select pawn to move 11 or swap."; if (canSwap) gameState.targetableOpponents = opponentsOnBoard; } } else if (card === '7') { player.pawns.forEach(pawn => { if (getPossibleMovesForPawn(pawn, '1').length > 0) { gameState.selectablePawns.push(pawn); } }); if (gameState.selectablePawns.length > 0) { gameState.currentAction = 'select-7-pawn1'; gameState.message = "Draw 7: Select first pawn to move or split."; } } else { player.pawns.forEach(pawn => { if (getPossibleMovesForPawn(pawn, card).length > 0) { gameState.selectablePawns.push(pawn); } }); if (gameState.selectablePawns.length > 0) { gameState.currentAction = 'select-pawn'; gameState.message = `Draw ${card}: Select pawn to move.`; } } if (!gameState.currentAction && !checkForAnyValidAction(playerIndex, card)) { gameState.message = `Draw ${card}: No possible moves. Turn skipped.`; console.log(`Player ${playerIndex} has no valid actions for card ${card}.`); gameState.discardPile.push(gameState.currentCard); gameState.currentCard = null; setTimeout(nextTurn, 1500); } updateUI(); drawGame(); }
+        function drawCardAction() { if (gameState.currentCard !== null || gameState.gameOver) return; if (gameState.deck.length === 0) { if (gameState.discardPile.length === 0) { gameState.message = "No cards left!"; updateUI(); return; } gameState.deck = [...gameState.discardPile]; gameState.discardPile = []; shuffleDeck(gameState.deck); gameState.message = "Reshuffled discard pile."; updateUI(); setTimeout(drawCardAction, 1000); return; } gameState.currentCard = gameState.deck.pop(); const currentPlayerName = PLAYERS[gameState.currentPlayerIndex].name; console.log(`Player ${gameState.currentPlayerIndex} (${currentPlayerName}) drew: ${gameState.currentCard}`); handleCardDraw(gameState.currentPlayerIndex, gameState.currentCard); }
+        function checkWinCondition(playerIndex) { const player = gameState.players[playerIndex]; const allHome = player.pawns.every(p => p.positionType === 'home'); if (allHome) { console.log(`Player ${playerIndex} (${player.details.name}) Wins!`); gameState.gameOver = true; gameState.message = ""; winMessageEl.textContent = `${player.details.name} Wins! Congratulations!`; updateUI(); } return allHome; }
+        function executeMove(pawn, destination, endTurnAfter = true) { console.log(`Executing Move: Pawn ${pawn.id} to Type: ${destination.positionType}, Index: ${destination.positionIndex}`); const playerIndex = pawn.playerIndex; let message = ""; if (destination.positionType === 'board') { const bumpedPawn = getPawnAtBoardIndex(destination.positionIndex); if (bumpedPawn && bumpedPawn.playerIndex !== playerIndex) { sendPawnToStart(bumpedPawn); message = `Bumped ${PLAYERS[bumpedPawn.playerIndex].name}'s pawn! `; console.log(message); } } pawn.positionType = destination.positionType; pawn.positionIndex = destination.positionIndex; let didSlide = false; if (pawn.positionType === 'board') { const slide = SLIDE_INFO[pawn.positionIndex]; if (slide && slide.colorIndex !== playerIndex) { didSlide = true; message += `Landed on ${PLAYERS[slide.colorIndex].name}'s slide! `; console.log(message); const slideStartIndex = pawn.positionIndex; const slideEndIndex = slide.endBoardIndex; let currentIndex = (slideStartIndex + 1) % PATH_LENGTH; while (true) { const pawnOnSlide = getPawnAtBoardIndex(currentIndex); if (pawnOnSlide) { sendPawnToStart(pawnOnSlide); message += ` slid into & bumped ${PLAYERS[pawnOnSlide.playerIndex].name}! `; console.log(`Slide bumped pawn at index ${currentIndex}`); } if (currentIndex === slideEndIndex) break; currentIndex = (currentIndex + 1) % PATH_LENGTH; if(currentIndex === (slideStartIndex + 1) % PATH_LENGTH) { console.error("Infinite loop detected in slide bumping!"); break; } } pawn.positionIndex = slideEndIndex; console.log(`Pawn slid to index ${slideEndIndex}`); const finalBumpedPawn = getPawnAtBoardIndex(slideEndIndex); if (finalBumpedPawn && finalBumpedPawn.playerIndex !== playerIndex) { sendPawnToStart(finalBumpedPawn); message += ` Bumped ${PLAYERS[finalBumpedPawn.playerIndex].name} at slide end!`; console.log(message); } } } gameState.message = message.trim() || "Move complete."; let won = false; if (pawn.positionType === 'home') { won = checkWinCondition(playerIndex); } gameState.selectedPawn = null; gameState.validMoves = []; gameState.selectablePawns = []; gameState.targetableOpponents = []; if (endTurnAfter && !won) { nextTurn(); } else { drawGame(); updateUI(); } }
+        function executeSorry(startPawn, targetPawn) { console.log(`Executing Sorry! Pawn ${startPawn.id} bumping Player ${targetPawn.playerIndex} Pawn ${targetPawn.id}`); const targetPositionIndex = targetPawn.positionIndex; sendPawnToStart(targetPawn); startPawn.positionType = 'board'; startPawn.positionIndex = targetPositionIndex; gameState.message = `Sorry! Bumped ${PLAYERS[targetPawn.playerIndex].name}'s pawn!`; gameState.selectedPawn = null; gameState.validMoves = []; gameState.selectablePawns = []; gameState.targetableOpponents = []; nextTurn(); }
+        function executeSwap(playerPawn, opponentPawn) { console.log(`Executing Swap: Player ${playerPawn.playerIndex} Pawn ${playerPawn.id} with Player ${opponentPawn.playerIndex} Pawn ${opponentPawn.id}`); const playerPosIndex = playerPawn.positionIndex; const opponentPosIndex = opponentPawn.positionIndex; playerPawn.positionIndex = opponentPosIndex; opponentPawn.positionIndex = playerPosIndex; gameState.message = `Swapped places with ${PLAYERS[opponentPawn.playerIndex].name}!`; const slide = SLIDE_INFO[playerPawn.positionIndex]; if (slide && slide.colorIndex !== playerPawn.playerIndex) { console.log("Player pawn landed on slide after swap!"); gameState.message += ` Landed on a slide!`; } else { const bumpedPawn = getPawnAtBoardIndex(playerPawn.positionIndex); if (bumpedPawn && bumpedPawn !== opponentPawn && bumpedPawn.playerIndex !== playerPawn.playerIndex) { sendPawnToStart(bumpedPawn); gameState.message += ` Bumped another pawn after swap!`; console.log("Unexpected bump after swap!"); } } gameState.selectedPawn = null; gameState.validMoves = []; gameState.selectablePawns = []; gameState.targetableOpponents = []; nextTurn(); }
+        function handleCanvasClick(event) { if (!gameState.currentCard || gameState.gameOver) return; const rect = canvas.getBoundingClientRect(); const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height; const clickX = (event.clientX - rect.left) * scaleX; const clickY = (event.clientY - rect.top) * scaleY; const currentPlayerIndex = gameState.currentPlayerIndex; const currentCard = gameState.currentCard; let clickedPawn = null; let clickedMove = null; for (const player of gameState.players) { for (const pawn of player.pawns) { if (isClickOnPawn(clickX, clickY, pawn)) { clickedPawn = pawn; break; } } if (clickedPawn) break; } if (gameState.validMoves.length > 0) { for (const move of gameState.validMoves) { if (move.type === 'move' && isClickOnSquare(clickX, clickY, move.pixelX, move.pixelY)) { clickedMove = move; break; } } } console.log("Click Action:", gameState.currentAction, "Clicked Pawn:", clickedPawn?.id, "Clicked Move:", clickedMove); switch (gameState.currentAction) { case 'select-pawn': if (clickedPawn && gameState.selectablePawns.includes(clickedPawn)) { gameState.selectedPawn = clickedPawn; gameState.validMoves = getPossibleMovesForPawn(clickedPawn, currentCard); gameState.selectablePawns = []; gameState.currentAction = 'select-move'; gameState.message = `Pawn ${clickedPawn.id} selected. Click destination.`; } else { gameState.message = "Please click one of your highlighted pawns."; } break; case 'select-move': if (clickedMove && gameState.selectedPawn) { executeMove(gameState.selectedPawn, clickedMove); return; } else if (clickedPawn === gameState.selectedPawn) { gameState.message = "Pawn deselected. Select a pawn."; gameState.selectedPawn = null; gameState.validMoves = []; handleCardDraw(currentPlayerIndex, currentCard); return; } else { gameState.message = "Click a valid green destination square."; } break; case 'select-sorry-pawn': if (clickedPawn && gameState.selectablePawns.includes(clickedPawn)) { gameState.selectedPawn = clickedPawn; gameState.selectablePawns = []; gameState.currentAction = 'select-sorry-target'; gameState.message = "Select an opponent's pawn to bump."; } else { gameState.message = "Select one of your pawns from Start."; } break; case 'select-sorry-target': if (clickedPawn && gameState.targetableOpponents.includes(clickedPawn)) { executeSorry(gameState.selectedPawn, clickedPawn); return; } else { gameState.message = "Select a highlighted opponent's pawn."; } break; case 'select-11-pawn': if (clickedPawn && gameState.selectablePawns.includes(clickedPawn)) { gameState.selectedPawn = clickedPawn; gameState.validMoves = getPossibleMovesForPawn(clickedPawn, '11'); gameState.selectablePawns = []; gameState.currentAction = 'select-11-action'; gameState.message = "Move 11 (click green square) or Swap (click opponent)?"; } else { gameState.message = "Select one of your highlighted pawns."; } break; case 'select-11-action': if (clickedMove && gameState.selectedPawn) { executeMove(gameState.selectedPawn, clickedMove); return; } else if (clickedPawn && gameState.targetableOpponents.includes(clickedPawn)) { executeSwap(gameState.selectedPawn, clickedPawn); return; } else { gameState.message = "Click a green square (move 11) or a highlighted opponent (swap)."; } break; case 'select-7-pawn1': if (clickedPawn && gameState.selectablePawns.includes(clickedPawn)) { gameState.selectedPawn = clickedPawn; gameState.splitData.firstPawn = clickedPawn; gameState.validMoves = []; for (let i = 1; i <= 7; i++) { const moves = getPossibleMovesForPawn(clickedPawn, i.toString()); moves.forEach(m => { m.moveValue = i; m.type = (i < 7) ? 'split-part1' : 'move'; gameState.validMoves.push(m); }); } gameState.selectablePawns = []; gameState.currentAction = 'select-7-action'; gameState.message = "Select move (1-7). Click green square."; } else { gameState.message = "Select first pawn for 7."; } break; case 'select-7-action': clickedMove = null; if (gameState.validMoves.length > 0) { for (const move of gameState.validMoves) { if (isClickOnSquare(clickX, clickY, move.pixelX, move.pixelY)) { clickedMove = move; break; } } } if (clickedMove) { if (clickedMove.type === 'move' && clickedMove.moveValue === 7) { executeMove(gameState.selectedPawn, clickedMove); return; } else if (clickedMove.type === 'split-part1') { gameState.splitData.firstMoveValue = clickedMove.moveValue; executeMove(gameState.splitData.firstPawn, clickedMove, false); const remainingSteps = 7 - gameState.splitData.firstMoveValue; gameState.selectablePawns = []; gameState.players[currentPlayerIndex].pawns.forEach(pawn => { if (pawn !== gameState.splitData.firstPawn || pawn.positionType === 'start') { if (getPossibleMovesForPawn(pawn, remainingSteps.toString()).length > 0) { gameState.selectablePawns.push(pawn); } } }); if (gameState.selectablePawns.length > 0) { gameState.selectedPawn = null; gameState.validMoves = []; gameState.currentAction = 'select-7-pawn2'; gameState.message = `Moved ${gameState.splitData.firstMoveValue}. Select pawn for remaining ${remainingSteps} steps.`; } else { gameState.message = `Moved ${gameState.splitData.firstMoveValue}. No valid second move.`; console.log("Split 7: No valid second move found."); nextTurn(); return; } } } else { gameState.message = "Click a valid green square for the first move/split."; } break; case 'select-7-pawn2': if (clickedPawn && gameState.selectablePawns.includes(clickedPawn)) { gameState.selectedPawn = clickedPawn; gameState.splitData.secondPawn = clickedPawn; const remainingSteps = 7 - gameState.splitData.firstMoveValue; gameState.validMoves = getPossibleMovesForPawn(clickedPawn, remainingSteps.toString()); gameState.selectablePawns = []; gameState.currentAction = 'select-7-move2'; gameState.message = `Pawn ${clickedPawn.id} selected. Click destination for ${remainingSteps} steps.`; } else { gameState.message = "Select a highlighted pawn for the second part of the split."; } break; case 'select-7-move2': if (clickedMove && gameState.selectedPawn) { executeMove(gameState.selectedPawn, clickedMove); return; } else { gameState.message = "Click a valid green square for the second move."; } break; default: console.warn("Unknown action state:", gameState.currentAction); gameState.message = "Something went wrong. Select a pawn."; gameState.selectedPawn = null; gameState.validMoves = []; handleCardDraw(currentPlayerIndex, currentCard); break; } drawGame(); updateUI(); }
+        function nextTurn() { if (gameState.gameOver) return; console.log(`Ending turn for Player ${gameState.currentPlayerIndex}`); if (gameState.currentCard) { gameState.discardPile.push(gameState.currentCard); gameState.currentCard = null; } gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % PLAYERS.length; gameState.selectedPawn = null; gameState.validMoves = []; gameState.selectablePawns = []; gameState.targetableOpponents = []; gameState.currentAction = null; gameState.splitData = { firstPawn: null, firstMoveValue: 0, secondPawn: null }; const nextPlayerName = PLAYERS[gameState.currentPlayerIndex].name; gameState.message = `${nextPlayerName}'s turn. Draw a card.`; console.log(`Starting turn for Player ${gameState.currentPlayerIndex} (${nextPlayerName})`); updateUI(); drawGame(); }
+        function drawGame() { ctx.clearRect(0, 0, BOARD_SIZE, BOARD_SIZE); drawBoard(); drawPawns(); drawHighlights(); }
+
+        // --- Event Listeners ---
+        drawCardButton.addEventListener('click', drawCardAction);
+        canvas.addEventListener('click', handleCanvasClick);
+        resetButton.addEventListener('click', initializeGame);
+
+        // --- Initial Setup ---
+        window.onload = () => { console.log("Window loaded, initializing game."); initializeGame(); };
+
+        // --- Utility Color Functions (Basic Implementation) ---
+        function adjustColor(hex, percent) { try { hex = hex.replace(/^#/, ''); if (hex.length === 3) { hex = hex.split('').map(c => c + c).join(''); } const num = parseInt(hex, 16); const amt = Math.round(2.55 * percent); let r = (num >> 16) + amt; let g = ((num >> 8) & 0x00FF) + amt; let b = (num & 0x0000FF) + amt; r = Math.min(255, Math.max(0, r)); g = Math.min(255, Math.max(0, g)); b = Math.min(255, Math.max(0, b)); return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`; } catch (e) { console.error("Error adjusting color:", hex, e); return hex; } }
+        function lightenColor(hex, percent) { return adjustColor(hex, Math.abs(percent)); }
+        function darkenColor(hex, percent) { return adjustColor(hex, -Math.abs(percent)); }
+
+    </script>
+
+</body>
+</html>
