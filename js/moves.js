@@ -1,14 +1,24 @@
 // Import required modules
 import { 
-    PLAYERS, PLAYER_START_INFO, SLIDE_INFO, PATH_LENGTH, SAFETY_ZONE_LENGTH 
+    PLAYERS, PLAYER_START_INFO, SLIDE_INFO, PATH_LENGTH, SAFETY_ZONE_LENGTH,
+    getPlayerCoords, BOARD_LAYOUT, SQUARE_SIZE
 } from './constants.js';
 import { 
     BOARD_PATH, SAFETY_ZONES, gameState, getPawnAtBoardIndex, isOccupiedByOwnPawnBoard, 
     isOccupiedByOwnPawnSafe, sendPawnToStart, getOpponentPawnsOnBoard,
-    getPlayerPawnsInStart 
+    getPlayerPawnsInStart, isOccupiedByOpponent
 } from './gameState.js';
 import { drawGame } from './drawing.js';
 import { updateUI } from './ui.js';
+
+// Helper function to check if a board position is occupied by an opponent's pawn
+function isOccupiedByOppPawnBoard(position, playerIndex) {
+    // Get the pawn at this board position
+    const pawn = getPawnAtBoardIndex(position);
+    
+    // If there's a pawn and it belongs to another player, return true
+    return pawn && pawn.playerIndex !== playerIndex;
+}
 
 // Calculate the possible moves for a pawn based on a card
 export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
@@ -33,6 +43,19 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
                 });
             }
         }
+        // Allow backward movement in safety zone
+        if (pawn.positionType === 'safe' && pawn.positionIndex >= 4) {
+            const targetSafeIndex = pawn.positionIndex - 4;
+            if (!isOccupiedByOwnPawnSafe(playerIndex, targetSafeIndex)) {
+                moves.push({
+                    type: 'move',
+                    positionType: 'safe',
+                    positionIndex: targetSafeIndex,
+                    pixelX: SAFETY_ZONES[playerIndex][targetSafeIndex].pixelX,
+                    pixelY: SAFETY_ZONES[playerIndex][targetSafeIndex].pixelY
+                });
+            }
+        }
     } else if (cardValue === '10') {
         if (pawn.positionType === 'board' || pawn.positionType === 'safe') {
             const fwd10 = calculateForwardSteps(pawn, 10, startInfo);
@@ -51,6 +74,35 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
                     pixelX: BOARD_PATH[targetIndex].pixelX,
                     pixelY: BOARD_PATH[targetIndex].pixelY
                 });
+            }
+        }
+        // Allow backward movement in safety zone
+        if (pawn.positionType === 'safe' && pawn.positionIndex >= 1) {
+            const targetSafeIndex = pawn.positionIndex - 1;
+            if (!isOccupiedByOwnPawnSafe(playerIndex, targetSafeIndex)) {
+                moves.push({
+                    type: 'move',
+                    positionType: 'safe',
+                    positionIndex: targetSafeIndex,
+                    pixelX: SAFETY_ZONES[playerIndex][targetSafeIndex].pixelX,
+                    pixelY: SAFETY_ZONES[playerIndex][targetSafeIndex].pixelY
+                });
+            }
+        }
+    } else if (cardValue === '7') {
+        // Special handling for card 7 - calculate all possible moves between 1-7 spaces
+        if (pawn.positionType === 'board' || pawn.positionType === 'safe') {
+            // Calculate all possible move distances from 1 to 7
+            for (let steps = 1; steps <= 7; steps++) {
+                const fwdMove = calculateForwardSteps(pawn, steps, startInfo);
+                if (fwdMove.type !== 'invalid') {
+                    moves.push({ 
+                        type: 'move', 
+                        ...fwdMove,
+                        // Add a steps property so we know how many steps this move represents
+                        steps: steps 
+                    });
+                }
             }
         }
     } else if (!isNaN(numericCardValue) && numericCardValue > 0) {
@@ -80,67 +132,149 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
     let currentType = pawn.positionType;
     let stepsLeft = steps;
     
-    while (stepsLeft > 0) {
-        // Check if we're approaching the safety entry
-        if (currentType === 'board') {
-            // Check if we need to enter the safety zone
-            // Make sure exact position is compared and correct player entry points are checked
-            if (currentPos === startInfo.safetyEntryIndex) {
-                currentType = 'safe';
-                currentPos = -1; // Start before the first safety zone space
+    // Log the initial position and steps for debugging
+    console.log(`Calculating forward steps: Pawn at ${currentType} position ${currentPos}, moving ${steps} steps`);
+    
+    // Special case: If pawn is already in safety zone, handle direct movement within it
+    if (currentType === 'safe') {
+        const targetSafeIndex = currentPos + steps;
+        
+        // Check if move stays within the safety zone bounds
+        if (targetSafeIndex < SAFETY_ZONE_LENGTH) {
+            // Check if the position is not occupied
+            if (!isOccupiedByOwnPawnSafe(pawn.playerIndex, targetSafeIndex)) {
+                // Valid move within safety zone
+                console.log(`Direct movement within safety zone from ${currentPos} to ${targetSafeIndex}`);
+                return {
+                    positionType: 'safe',
+                    positionIndex: targetSafeIndex,
+                    pixelX: SAFETY_ZONES[pawn.playerIndex][targetSafeIndex].pixelX,
+                    pixelY: SAFETY_ZONES[pawn.playerIndex][targetSafeIndex].pixelY
+                };
+            } else {
+                // Position is occupied
+                return { type: 'invalid' };
             }
-        }
-        
-        // Move forward
-        if (currentType === 'board') {
-            // Ensure proper calculation for the wrap-around
-            currentPos = (currentPos + 1) % PATH_LENGTH;
-        } else {
-            currentPos++;
-        }
-        
-        stepsLeft--;
-        
-        // Check if we reached home
-        if (currentType === 'safe' && currentPos === SAFETY_ZONE_LENGTH) {
-            if (stepsLeft === 0) return {
+        } else if (targetSafeIndex === SAFETY_ZONE_LENGTH) {
+            // Reach home with exact count
+            console.log(`Exact move to home from safety position ${currentPos}`);
+            return {
                 positionType: 'home',
                 positionIndex: -1,
-                pixelX: PLAYERS[pawn.playerIndex].homeCoord.x,
-                pixelY: PLAYERS[pawn.playerIndex].homeCoord.y
+                pixelX: BOARD_LAYOUT.homeAreas[pawn.playerIndex].x * SQUARE_SIZE,
+                pixelY: BOARD_LAYOUT.homeAreas[pawn.playerIndex].y * SQUARE_SIZE
             };
-            else return { type: 'invalid' };
-        }
-        
-        if (currentType === 'safe' && currentPos > SAFETY_ZONE_LENGTH) {
+        } else {
+            // Overshot home
             return { type: 'invalid' };
         }
     }
     
-    // Check if the final position is occupied by your own pawn
-    if (currentType === 'board' && isOccupiedByOwnPawnBoard(currentPos, pawn.playerIndex)) {
-        return { type: 'invalid' };
+    // Special case: If we're landing exactly on a safety entry point
+    if (currentType === 'board' && stepsLeft > 0) {
+        // Calculate the destination position without entering safety zone to check 
+        // if it would land exactly on safety entry
+        const destBoardPos = (currentPos + steps) % PATH_LENGTH;
+        if (destBoardPos === startInfo.safetyEntryIndex) {
+            // Valid move directly into safety zone
+            console.log(`Direct entry to safety zone from ${currentPos} to entry point ${startInfo.safetyEntryIndex}`);
+            return {
+                positionType: 'safe',
+                positionIndex: 0,
+                pixelX: SAFETY_ZONES[pawn.playerIndex][0].pixelX,
+                pixelY: SAFETY_ZONES[pawn.playerIndex][0].pixelY
+            };
+        }
     }
     
-    if (currentType === 'safe' && isOccupiedByOwnPawnSafe(pawn.playerIndex, currentPos)) {
-        return { type: 'invalid' };
+    // Normal step-by-step movement
+    while (stepsLeft > 0) {
+        // Move forward one step
+        if (currentType === 'board') {
+            // Check if the NEXT position would be the safety entry point for this player
+            const nextPos = (currentPos + 1) % PATH_LENGTH;
+            if (nextPos === startInfo.safetyEntryIndex) {
+                // We're about to enter the safety zone
+                currentType = 'safe';
+                currentPos = 0;  // First safety zone space
+                console.log(`Entering safety zone at safetyEntryIndex ${startInfo.safetyEntryIndex}`);
+            } else {
+                // Handle special wrap-around from position 59 to position 0
+                if (currentPos === 59) {
+                    currentPos = 0;
+                } else {
+                    // Standard increment for other positions
+                    currentPos = nextPos;
+                }
+                
+                // Log each step for debugging wrap-around
+                console.log(`Step ${steps - stepsLeft + 1}: Now at board position ${currentPos}`);
+            }
+        } else if (currentType === 'safe') {
+            // Moving within safety zone
+            currentPos++;
+            console.log(`Step ${steps - stepsLeft + 1}: Now at safety position ${currentPos}`);
+            
+            // Check if we've reached home
+            if (currentPos === SAFETY_ZONE_LENGTH) {
+                // Reached home with exact count
+                console.log(`Exact move to home from safety position ${currentPos-1}`);
+                return {
+                    positionType: 'home',
+                    positionIndex: -1,
+                    pixelX: BOARD_LAYOUT.homeAreas[pawn.playerIndex].x * SQUARE_SIZE,
+                    pixelY: BOARD_LAYOUT.homeAreas[pawn.playerIndex].y * SQUARE_SIZE
+                };
+            }
+        }
+        
+        stepsLeft--;
     }
     
-    // Return the calculated destination
+    // After all steps are taken, check if we're at a valid position
     if (currentType === 'board') {
+        // Check if the position is occupied
+        if (isOccupiedByOppPawnBoard(currentPos, pawn.playerIndex)) {
+            // Can bump opponent's pawn
+            return {
+                positionType: 'board',
+                positionIndex: currentPos,
+                pixelX: BOARD_PATH[currentPos].pixelX,
+                pixelY: BOARD_PATH[currentPos].pixelY,
+                bump: true
+            };
+        } else if (isOccupiedByOwnPawnBoard(pawn.playerIndex, currentPos)) {
+            // Position is occupied by own pawn - invalid move
+            return { type: 'invalid' };
+        }
+        
+        // Valid move to board position
         return {
             positionType: 'board',
             positionIndex: currentPos,
             pixelX: BOARD_PATH[currentPos].pixelX,
             pixelY: BOARD_PATH[currentPos].pixelY
         };
-    } else {
-        return {
-            positionType: 'safe',
-            positionIndex: currentPos,
-            pixelX: SAFETY_ZONES[pawn.playerIndex][currentPos].pixelX,
-            pixelY: SAFETY_ZONES[pawn.playerIndex][currentPos].pixelY
-        };
+    } else if (currentType === 'safe') {
+        // Check if position is within safety zone bounds
+        if (currentPos < SAFETY_ZONE_LENGTH) {
+            // Check if the position is occupied by own pawn
+            if (isOccupiedByOwnPawnSafe(pawn.playerIndex, currentPos)) {
+                // Position is occupied - invalid move
+                return { type: 'invalid' };
+            }
+            
+            // Valid move within safety zone
+            return {
+                positionType: 'safe',
+                positionIndex: currentPos,
+                pixelX: SAFETY_ZONES[pawn.playerIndex][currentPos].pixelX,
+                pixelY: SAFETY_ZONES[pawn.playerIndex][currentPos].pixelY
+            };
+        } else {
+            // Overshot home
+            return { type: 'invalid' };
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 // Import constants and game state
 import { 
-    BOARD_SIZE, SQUARE_SIZE, BOARD_MARGIN, PAWN_RADIUS, 
-    START_AREA_SIZE, HOME_AREA_SIZE, PLAYERS, SLIDE_INFO
+    BOARD_SIZE, SQUARE_SIZE, BOARD_MARGIN, PAWN_RADIUS,
+    BOARD_LAYOUT, PLAYERS, SLIDE_INFO, getPlayerCoords
 } from './constants.js';
 import { BOARD_PATH, SAFETY_ZONES, gameState } from './gameState.js';
 
@@ -87,13 +87,17 @@ export function getPixelCoordsForPawn(pawn) {
     let coords = null;
     try {
         if (pawn.positionType === 'start') {
-            const playerDetails = PLAYERS[pawn.playerIndex];
+            // Get start position directly from BOARD_LAYOUT
+            const startCoord = {
+                x: BOARD_LAYOUT.startAreas[pawn.playerIndex].x * SQUARE_SIZE,
+                y: BOARD_LAYOUT.startAreas[pawn.playerIndex].y * SQUARE_SIZE
+            };
             const angle = (pawn.id / 4) * Math.PI * 2 + pawn.playerIndex * Math.PI / 2;
-            const radiusOffset = START_AREA_SIZE * 0.25;
+            const radiusOffset = SQUARE_SIZE * BOARD_LAYOUT.startAreaRadius * 0.55;
             
             coords = {
-                x: playerDetails.startCoord.x + Math.cos(angle) * radiusOffset,
-                y: playerDetails.startCoord.y + Math.sin(angle) * radiusOffset
+                x: startCoord.x + Math.cos(angle) * radiusOffset,
+                y: startCoord.y + Math.sin(angle) * radiusOffset
             };
         } else if (pawn.positionType === 'board') {
             if (pawn.positionIndex >= 0 && pawn.positionIndex < BOARD_PATH.length) {
@@ -114,13 +118,17 @@ export function getPixelCoordsForPawn(pawn) {
                 console.error(`Invalid safe index ${pawn.positionIndex} for pawn ${pawn.id}`);
             }
         } else if (pawn.positionType === 'home') {
-            const playerDetails = PLAYERS[pawn.playerIndex];
+            // Get home position directly from BOARD_LAYOUT
+            const homeCoord = {
+                x: BOARD_LAYOUT.homeAreas[pawn.playerIndex].x * SQUARE_SIZE,
+                y: BOARD_LAYOUT.homeAreas[pawn.playerIndex].y * SQUARE_SIZE
+            };
             const angle = (pawn.id / 4) * Math.PI * 2 + pawn.playerIndex * Math.PI / 1.5;
-            const radiusOffset = HOME_AREA_SIZE * 0.25;
+            const radiusOffset = SQUARE_SIZE * BOARD_LAYOUT.homeAreaRadius * 0.25;
             
             coords = {
-                x: playerDetails.homeCoord.x + Math.cos(angle) * radiusOffset,
-                y: playerDetails.homeCoord.y + Math.sin(angle) * radiusOffset
+                x: homeCoord.x + Math.cos(angle) * radiusOffset,
+                y: homeCoord.y + Math.sin(angle) * radiusOffset
             };
         }
     } catch (e) {
@@ -174,6 +182,17 @@ export function drawBoard() {
     // Draw main path squares from BOARD_PATH data
     BOARD_PATH.forEach((sq, index) => {
         drawRoundedRect(sq.gridX * SQUARE_SIZE + 2, sq.gridY * SQUARE_SIZE + 2, SQUARE_SIZE - 4, SQUARE_SIZE - 4, 4, trackColor, outlineColor);
+        
+        // DEBUG: Draw position index on each square
+        ctx.fillStyle = '#333333';
+        ctx.font = `${SQUARE_SIZE * 0.25}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(index.toString(), sq.pixelX, sq.pixelY);
+        
+        // DEBUG: Draw grid coordinates in smaller text
+        ctx.font = `${SQUARE_SIZE * 0.18}px monospace`;
+        ctx.fillText(`(${sq.gridX},${sq.gridY})`, sq.pixelX, sq.pixelY + SQUARE_SIZE * 0.25);
     });
     
     // Explicitly draw the four corner squares using the same style
@@ -188,7 +207,13 @@ export function drawBoard() {
         const zoneOutline = PLAYERS[playerIndex].color + '88'; // Stronger outline
         
         zone.forEach(sq => {
+            // Use grid coordinates for drawing
             drawRoundedRect(sq.gridX * SQUARE_SIZE + 2, sq.gridY * SQUARE_SIZE + 2, SQUARE_SIZE - 4, SQUARE_SIZE - 4, 4, color, zoneOutline);
+            
+            // Draw safety zone index numbers for debugging
+            ctx.fillStyle = '#000';
+            ctx.font = `${SQUARE_SIZE * 0.25}px monospace`;
+            ctx.fillText(sq.safeIndex.toString(), sq.pixelX, sq.pixelY);
         });
     });
 
@@ -253,11 +278,26 @@ export function drawBoard() {
     });
 
     // --- Layer 4: Draw Start and Home Areas ---
-    PLAYERS.forEach(player => {
+    PLAYERS.forEach((player, playerIndex) => {
+        // Get player coordinates directly from BOARD_LAYOUT
+        const startCoord = {
+            x: BOARD_LAYOUT.startAreas[playerIndex].x * SQUARE_SIZE,
+            y: BOARD_LAYOUT.startAreas[playerIndex].y * SQUARE_SIZE
+        };
+        const homeCoord = {
+            x: BOARD_LAYOUT.homeAreas[playerIndex].x * SQUARE_SIZE,
+            y: BOARD_LAYOUT.homeAreas[playerIndex].y * SQUARE_SIZE
+        };
+        
+        // DEBUG: Log player coordinates
+        console.log(`Player ${playerIndex} (${player.name}) - Drawing start at:`, 
+            startCoord.x / SQUARE_SIZE, startCoord.y / SQUARE_SIZE,
+            "Home at:", homeCoord.x / SQUARE_SIZE, homeCoord.y / SQUARE_SIZE);
+        
         // Draw Start Area
-        const startSize = START_AREA_SIZE * 0.9;
-        const startX = player.startCoord.x - startSize / 2;
-        const startY = player.startCoord.y - startSize / 2;
+        const startSize = SQUARE_SIZE * BOARD_LAYOUT.startAreaRadius * 2;
+        const startX = startCoord.x - startSize / 2;
+        const startY = startCoord.y - startSize / 2;
         
         drawRoundedRect(startX, startY, startSize, startSize, 10, player.color + '44', player.color);
         drawRoundedRect(startX + 5, startY + 5, startSize - 10, startSize - 10, 8, '#ffffffcc');
@@ -270,14 +310,21 @@ export function drawBoard() {
         ctx.shadowBlur = 3;
         ctx.shadowOffsetX = 1;
         ctx.shadowOffsetY = 1;
-        ctx.fillText('S', player.startCoord.x, player.startCoord.y);
+        ctx.fillText('S', startCoord.x, startCoord.y);
         ctx.shadowColor = 'transparent';
     });
     
-    PLAYERS.forEach(player => {
+    PLAYERS.forEach((player, playerIndex) => {
+        // Get player coordinates directly from BOARD_LAYOUT
+        const homeCoord = {
+            x: BOARD_LAYOUT.homeAreas[playerIndex].x * SQUARE_SIZE,
+            y: BOARD_LAYOUT.homeAreas[playerIndex].y * SQUARE_SIZE
+        };
+        
         // Draw Home Area
-        drawCircle(player.homeCoord.x, player.homeCoord.y, HOME_AREA_SIZE / 2, player.color + '22', player.color + 'aa', 3);
-        drawCircle(player.homeCoord.x, player.homeCoord.y, HOME_AREA_SIZE / 2.5, player.color + '88', player.color + 'aa', 2);
+        const homeSize = SQUARE_SIZE * BOARD_LAYOUT.homeAreaRadius * 2;
+        drawCircle(homeCoord.x, homeCoord.y, homeSize / 2, player.color + '22', player.color + 'aa', 3);
+        drawCircle(homeCoord.x, homeCoord.y, homeSize / 2, player.color + '88', player.color + 'aa', 2);
         
         ctx.fillStyle = player.color;
         ctx.font = `bold ${SQUARE_SIZE * 0.55}px 'Press Start 2P'`;
@@ -287,7 +334,7 @@ export function drawBoard() {
         ctx.shadowBlur = 3;
         ctx.shadowOffsetX = 1;
         ctx.shadowOffsetY = 1;
-        ctx.fillText('H', player.homeCoord.x, player.homeCoord.y);
+        ctx.fillText('H', homeCoord.x, homeCoord.y);
         ctx.shadowColor = 'transparent';
     });
 }

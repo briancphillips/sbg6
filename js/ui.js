@@ -30,6 +30,12 @@ export function initUI(elements) {
     drawCardButton.addEventListener('click', drawCardAction);
     resetButton.addEventListener('click', resetGame);
     canvas.addEventListener('click', handleCanvasClick);
+    
+    // Add Skip Turn button functionality (for debugging)
+    const skipTurnButton = document.getElementById('skipTurnButton');
+    if (skipTurnButton) {
+        skipTurnButton.addEventListener('click', skipTurnAction);
+    }
 }
 
 // Update UI elements based on game state
@@ -165,6 +171,38 @@ export function handleCardDraw(playerIndex, card) {
     drawGame();
 }
 
+// Skip the current turn (for debugging)
+export function skipTurnAction() {
+    // Skip the current turn regardless of state
+    console.log("DEBUG: Manually skipping turn");
+    
+    // Clear current card and move to next turn
+    if (gameState.currentCard) {
+        gameState.discardPile.push(gameState.currentCard);
+    }
+    
+    // Reset game state for next turn
+    gameState.currentCard = null;
+    gameState.selectedPawn = null;
+    gameState.selectablePawns = [];
+    gameState.validMoves = [];
+    gameState.targetableOpponents = [];
+    gameState.currentAction = null;
+    gameState.splitData = { firstPawn: null, firstMoveValue: 0, secondPawn: null };
+    
+    // Add debug message
+    gameState.message = "DEBUG: Turn skipped manually";
+    
+    // Update UI
+    updateUI();
+    drawGame();
+    
+    // Trigger next turn
+    setTimeout(() => {
+        window.dispatchEvent(new Event('nextTurn'));
+    }, 500);
+}
+
 // Handle canvas clicks
 export function handleCanvasClick(event) {
     if (!gameState.currentCard || gameState.gameOver) return;
@@ -204,6 +242,17 @@ export function handleCanvasClick(event) {
     }
     
     console.log("Click Action:", gameState.currentAction, "Clicked Pawn:", clickedPawn?.id, "Clicked Move:", clickedMove);
+    
+    // Handle null currentAction - restore proper state
+    if (gameState.currentAction === null && gameState.currentCard) {
+        // Re-initialize action state based on current card
+        handleCardDraw(currentPlayerIndex, currentCard);
+        
+        // Update UI and redraw
+        drawGame();
+        updateUI();
+        return;
+    }
     
     // Handle clicks based on current action
     switch (gameState.currentAction) {
@@ -298,39 +347,17 @@ export function handleCanvasClick(event) {
             
         case 'select-7-move1':
             if (clickedMove && gameState.selectedPawn) {
-                // Full 7 move
-                if (clickedMove.positionType === 'home' || clickedMove === gameState.validMoves[0]) {
-                    executeMove(gameState.selectedPawn, clickedMove);
-                    return;
-                }
-                
-                // Split move - figure out how far we moved
-                let steps = 1;
-                if (gameState.selectedPawn.positionType === 'board') {
-                    if (clickedMove.positionType === 'board') {
-                        if (clickedMove.positionIndex > gameState.selectedPawn.positionIndex) {
-                            steps = clickedMove.positionIndex - gameState.selectedPawn.positionIndex;
-                        } else {
-                            steps = clickedMove.positionIndex + 60 - gameState.selectedPawn.positionIndex;
-                        }
-                    } else if (clickedMove.positionType === 'safe') {
-                        // Board to safety zone
-                        const safetyEntry = PLAYER_START_INFO[gameState.selectedPawn.playerIndex].safetyEntryIndex;
-                        if (gameState.selectedPawn.positionIndex <= safetyEntry) {
-                            steps = safetyEntry - gameState.selectedPawn.positionIndex + clickedMove.positionIndex + 1;
-                        } else {
-                            steps = safetyEntry + 60 - gameState.selectedPawn.positionIndex + clickedMove.positionIndex + 1;
-                        }
-                    }
-                } else if (gameState.selectedPawn.positionType === 'safe') {
-                    steps = clickedMove.positionIndex - gameState.selectedPawn.positionIndex;
-                }
+                // Get the steps from the clicked move
+                const steps = clickedMove.steps || 7; // Default to 7 if not specified
                 
                 // Store how many steps we used for the first part
                 gameState.splitData.firstMoveValue = steps;
                 
                 // Execute the first part of the split move
-                executeMove(gameState.selectedPawn, clickedMove, false);
+                executeMove(gameState.selectedPawn, clickedMove, steps === 7); // End turn only if using full 7
+                
+                // If we used all 7 steps, we're done
+                if (steps === 7) return;
                 
                 // Prepare for the second part of the split
                 const remainingSteps = 7 - steps;
@@ -349,11 +376,23 @@ export function handleCanvasClick(event) {
                 gameState.selectedPawn = null;
                 gameState.validMoves = [];
                 
+                // If no pawns can move the remaining steps, skip to next turn
+                if (gameState.selectablePawns.length === 0) {
+                    gameState.message = `No valid moves for remaining ${remainingSteps} steps. Turn ended.`;
+                    setTimeout(() => {
+                        // Discard card and move to next turn
+                        gameState.discardPile.push(gameState.currentCard);
+                        gameState.currentCard = null;
+                        window.dispatchEvent(new Event('nextTurn'));
+                    }, 1500);
+                }
+                
+                // Update UI and redraw
                 drawGame();
                 updateUI();
                 return;
             } else {
-                gameState.message = "Click a valid green destination square for the first part of 7.";
+                gameState.message = "Click a valid green destination square.";
             }
             break;
             

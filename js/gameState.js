@@ -1,9 +1,24 @@
 // Import constants
-import { PLAYERS, PAWNS_PER_PLAYER } from './constants.js';
+import { 
+    BOARD_LAYOUT, PLAYER_START_INFO, SQUARE_SIZE, 
+    PLAYERS, SLIDE_INFO, getPlayerCoords, PAWNS_PER_PLAYER
+} from './constants.js';
 
 // Board path and safety zones
-export const BOARD_PATH = [];
-export const SAFETY_ZONES = [[], [], [], []];
+export const BOARD_PATH = Array(60).fill().map((_, i) => {
+    return {
+        pixelX: 0,
+        pixelY: 0,
+        boardIndex: i
+    };
+});
+
+export const SAFETY_ZONES = [
+    Array(5).fill().map((_, i) => ({ pixelX: 0, pixelY: 0, safeIndex: i })), // Red (safety at index 2)
+    Array(5).fill().map((_, i) => ({ pixelX: 0, pixelY: 0, safeIndex: i })), // Blue (safety at index 17)
+    Array(5).fill().map((_, i) => ({ pixelX: 0, pixelY: 0, safeIndex: i })), // Yellow (safety at index 32)
+    Array(5).fill().map((_, i) => ({ pixelX: 0, pixelY: 0, safeIndex: i }))  // Green (safety at index 47)
+];
 
 // Game state
 export const gameState = { 

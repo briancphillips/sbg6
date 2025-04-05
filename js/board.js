@@ -1,5 +1,8 @@
 // Import constants and game state
-import { SQUARE_SIZE, SAFETY_ZONE_LENGTH, PATH_LENGTH } from './constants.js';
+import { 
+    SQUARE_SIZE, SAFETY_ZONE_LENGTH, PATH_LENGTH, 
+    BOARD_LAYOUT, PLAYER_START_INFO, getPlayerCoords 
+} from './constants.js';
 import { BOARD_PATH, SAFETY_ZONES } from './gameState.js';
 
 // Initialize the board paths and safety zones
@@ -7,8 +10,8 @@ export function initializeBoardPaths() {
     console.log("Initializing board paths...");
     
     // Clear any existing paths
-    BOARD_PATH.length = 0;
-    SAFETY_ZONES.forEach(zone => zone.length = 0);
+    while (BOARD_PATH.length > 0) BOARD_PATH.pop();
+    SAFETY_ZONES.forEach(zone => { while(zone.length > 0) zone.pop(); });
     
     // Helper to add a square to the board path
     function addSq(x, y) {
@@ -21,19 +24,24 @@ export function initializeBoardPaths() {
     }
     
     // Create the main board path - clockwise from top left
-    for (let i = 0; i < 15; i++) addSq(i + 1, 0);      // Top row
-    for (let i = 0; i < 15; i++) addSq(15, i + 1);     // Right column
-    for (let i = 0; i < 15; i++) addSq(14 - i, 15);    // Bottom row
-    for (let i = 0; i < 15; i++) addSq(0, 14 - i);     // Left column
+    // Top row (15 cells)
+    for (let i = 0; i < 15; i++) addSq(i + 1, 0);      
     
-    // Fix the last square to ensure proper path length
-    if (BOARD_PATH.length > 59) {
-        BOARD_PATH[59] = {
-            gridX: 0,
-            gridY: 1,
-            pixelX: 0.5 * SQUARE_SIZE,
-            pixelY: 1.5 * SQUARE_SIZE
-        };
+    // Right column (15 cells)
+    for (let i = 0; i < 15; i++) addSq(15, i + 1);     
+    
+    // Bottom row (15 cells)
+    for (let i = 0; i < 15; i++) addSq(14 - i, 15);    
+    
+    // Left column - properly space all 15 positions with unique coordinates
+    for (let i = 0; i < 15; i++) {
+        // Use 14-i to go from bottom to top
+        if (i < 14) {
+            addSq(0, 14 - i);  // Normal positions 45-58
+        } else {
+            // Ensure position 59 is at (0,0) to fix the path continuity
+            addSq(0, 0);       // Position 59 at the top-left corner
+        }
     }
     
     // Verify path length
@@ -41,44 +49,60 @@ export function initializeBoardPaths() {
         console.error(`Board path length mismatch! Expected ${PATH_LENGTH}, got ${BOARD_PATH.length}`);
     }
     
-    // Create safety zones
-    // Red safety zone (top)
+    // Create safety zones using the BOARD_LAYOUT configuration
+    // Red safety zone
     for (let i = 0; i < SAFETY_ZONE_LENGTH; i++) {
+        const startX = BOARD_LAYOUT.safetyZones[0].x;
+        const startY = BOARD_LAYOUT.safetyZones[0].y;
+        // Direction: Moving down toward home
         SAFETY_ZONES[0].push({
-            gridX: i + 1,
-            gridY: 1,
-            pixelX: (i + 1.5) * SQUARE_SIZE,
-            pixelY: (1.5) * SQUARE_SIZE
+            safeIndex: i,
+            gridX: Math.floor(startX),
+            gridY: Math.floor(startY) + i,
+            pixelX: (Math.floor(startX) + 0.5) * SQUARE_SIZE,
+            pixelY: (Math.floor(startY) + i + 0.5) * SQUARE_SIZE
         });
     }
     
-    // Blue safety zone (right)
+    // Blue safety zone
     for (let i = 0; i < SAFETY_ZONE_LENGTH; i++) {
+        const startX = BOARD_LAYOUT.safetyZones[1].x;
+        const startY = BOARD_LAYOUT.safetyZones[1].y;
+        // Direction: Moving left toward home
         SAFETY_ZONES[1].push({
-            gridX: 14,
-            gridY: i + 1,
-            pixelX: (14.5) * SQUARE_SIZE,
-            pixelY: (i + 1.5) * SQUARE_SIZE
+            safeIndex: i,
+            gridX: Math.floor(startX) - i,
+            gridY: Math.floor(startY),
+            pixelX: (Math.floor(startX) - i + 0.5) * SQUARE_SIZE,
+            pixelY: (Math.floor(startY) + 0.5) * SQUARE_SIZE
         });
     }
     
-    // Yellow safety zone (bottom)
+    // Yellow safety zone
     for (let i = 0; i < SAFETY_ZONE_LENGTH; i++) {
+        const startX = BOARD_LAYOUT.safetyZones[2].x;
+        const startY = BOARD_LAYOUT.safetyZones[2].y;
+        // Direction: Moving up toward home
         SAFETY_ZONES[2].push({
-            gridX: 14 - i,
-            gridY: 14,
-            pixelX: (14.5 - i) * SQUARE_SIZE,
-            pixelY: (14.5) * SQUARE_SIZE
+            safeIndex: i,
+            gridX: Math.floor(startX),
+            gridY: Math.floor(startY) - i,
+            pixelX: (Math.floor(startX) + 0.5) * SQUARE_SIZE,
+            pixelY: (Math.floor(startY) - i + 0.5) * SQUARE_SIZE
         });
     }
     
-    // Green safety zone (left)
+    // Green safety zone
     for (let i = 0; i < SAFETY_ZONE_LENGTH; i++) {
+        const startX = BOARD_LAYOUT.safetyZones[3].x;
+        const startY = BOARD_LAYOUT.safetyZones[3].y;
+        // Direction: Moving right toward home
         SAFETY_ZONES[3].push({
-            gridX: 1,
-            gridY: 14 - i,
-            pixelX: (1.5) * SQUARE_SIZE,
-            pixelY: (14.5 - i) * SQUARE_SIZE
+            safeIndex: i,
+            gridX: Math.floor(startX) + i,
+            gridY: Math.floor(startY),
+            pixelX: (Math.floor(startX) + i + 0.5) * SQUARE_SIZE,
+            pixelY: (Math.floor(startY) + 0.5) * SQUARE_SIZE
         });
     }
 }
