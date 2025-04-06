@@ -60,7 +60,7 @@ export function getPlayerCoords(playerIndex) {
 export const PLAYER_START_INFO = [ 
     { exitIndex: 4, safetyEntryIndex: 1 },  // Red - adjusted for (2,1) position
     { exitIndex: 19, safetyEntryIndex: 16 }, // Blue - adjusted for (14,2) position
-    { exitIndex: 34, safetyEntryIndex: 31 }, // Yellow - adjusted for (13,14) position
+    { exitIndex: 34, safetyEntryIndex: 31 }, // Yellow - NOTE: Code has special case to allow entry at position 30
     { exitIndex: 49, safetyEntryIndex: 46 }  // Green - corrected based on visual debug overlay
 ];
 

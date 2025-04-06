@@ -1,7 +1,7 @@
 // Import constants and game state
 import { 
     SQUARE_SIZE, SAFETY_ZONE_LENGTH, PATH_LENGTH, 
-    BOARD_LAYOUT, PLAYER_START_INFO, getPlayerCoords 
+    BOARD_LAYOUT, PLAYER_START_INFO, getPlayerCoords, PLAYERS
 } from './constants.js';
 import { BOARD_PATH, SAFETY_ZONES } from './gameState.js';
 
@@ -105,4 +105,67 @@ export function initializeBoardPaths() {
             pixelY: (Math.floor(startY) + 0.5) * SQUARE_SIZE
         });
     }
+    
+    // Verify and correct safety entry points
+    validateSafetyEntryPoints();
+}
+
+// Validate safety entry points by checking coordinates of safety zone starts against board path positions
+function validateSafetyEntryPoints() {
+    // Corrected entry points that will replace the ones in the constants
+    const correctedEntryPoints = [...PLAYER_START_INFO];
+    
+    console.log("=== VALIDATING SAFETY ENTRY POINTS ===");
+    
+    // For each player, check if the safety entry point aligns with the board path
+    for (let playerIdx = 0; playerIdx < 4; playerIdx++) {
+        // Get the claimed entry point from constants
+        const claimedEntryIdx = PLAYER_START_INFO[playerIdx].safetyEntryIndex;
+        console.log(`Player ${playerIdx} (${PLAYERS[playerIdx].name}): Claimed entry at position ${claimedEntryIdx}`);
+        
+        // Check the coordinates of the first safety zone position for this player
+        const safetyStart = SAFETY_ZONES[playerIdx][0];
+        
+        if (!safetyStart) {
+            console.error(`Missing safety zone start for player ${playerIdx}`);
+            continue;
+        }
+        
+        // Get the safety start grid coordinates
+        const safetyX = safetyStart.gridX;
+        const safetyY = safetyStart.gridY;
+        console.log(`  Safety zone starts at grid (${safetyX}, ${safetyY})`);
+        
+        // Find the closest board path position by coordinates
+        let closestIdx = -1;
+        let minDistance = Infinity;
+        
+        for (let i = 0; i < BOARD_PATH.length; i++) {
+            const pathPos = BOARD_PATH[i];
+            // Calculate distance (Manhattan distance is sufficient for grid)
+            const distance = Math.abs(pathPos.gridX - safetyX) + Math.abs(pathPos.gridY - safetyY);
+            
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestIdx = i;
+            }
+        }
+        
+        // Report findings
+        console.log(`  Closest board position: ${closestIdx} at distance ${minDistance}`);
+        console.log(`  Board position coordinates: (${BOARD_PATH[closestIdx].gridX}, ${BOARD_PATH[closestIdx].gridY})`);
+        
+        // Check if there's a mismatch
+        if (closestIdx !== claimedEntryIdx) {
+            console.warn(`  MISMATCH DETECTED! Claimed: ${claimedEntryIdx}, Actual: ${closestIdx}`);
+            
+            // Update the constants at runtime (this won't change the file)
+            PLAYER_START_INFO[playerIdx].safetyEntryIndex = closestIdx;
+            console.log(`  Corrected entry point to: ${closestIdx}`);
+        } else {
+            console.log(`  Entry point ${claimedEntryIdx} is correct`);
+        }
+    }
+    
+    console.log("=== SAFETY ENTRY VALIDATION COMPLETE ===");
 }
