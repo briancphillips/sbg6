@@ -112,12 +112,9 @@ export function initializeBoardPaths() {
 
 // Validate safety entry points by checking coordinates of safety zone starts against board path positions
 function validateSafetyEntryPoints() {
-    // Corrected entry points that will replace the ones in the constants
-    const correctedEntryPoints = [...PLAYER_START_INFO];
-    
     console.log("=== VALIDATING SAFETY ENTRY POINTS ===");
     
-    // For each player, check if the safety entry point aligns with the board path
+    // For each player, determine the correct safety entry point based on geometry
     for (let playerIdx = 0; playerIdx < 4; playerIdx++) {
         // Get the claimed entry point from constants
         const claimedEntryIdx = PLAYER_START_INFO[playerIdx].safetyEntryIndex;
@@ -131,106 +128,83 @@ function validateSafetyEntryPoints() {
             continue;
         }
         
-        // Get the safety start grid coordinates
-        const safetyX = safetyStart.gridX;
-        const safetyY = safetyStart.gridY;
-        console.log(`  Safety zone starts at grid (${safetyX}, ${safetyY})`);
+        // Get direction vectors for each safety zone based on how they're constructed in initializeBoardPaths
+        let entryDirection = { x: 0, y: 0 };
         
-        // Instead of just measuring distance, determine direction vector from safety start
-        // This gives us the direction towards the main board
-        let dirX = 0;
-        let dirY = 0;
-        
-        // Determine direction vector based on player (direction leading OUT of safety zone)
         switch (playerIdx) {
-            case 0: // Red (safety zone goes down, so entry is up)
-                dirX = 0;
-                dirY = 1;
+            case 0: // Red safety zone extends down, so entry is from above (0, -1)
+                entryDirection.x = 0;
+                entryDirection.y = -1;
                 break;
-            case 1: // Blue (safety zone goes left, so entry is right)
-                dirX = -1;
-                dirY = 0;
+            case 1: // Blue safety zone extends left, so entry is from right (1, 0)
+                entryDirection.x = 1;
+                entryDirection.y = 0;
                 break;
-            case 2: // Yellow (safety zone goes up, so entry is down)
-                dirX = 0;
-                dirY = -1;
+            case 2: // Yellow safety zone extends up, so entry is from below (0, 1)
+                entryDirection.x = 0;
+                entryDirection.y = 1;
                 break;
-            case 3: // Green (safety zone goes right, so entry is left)
-                dirX = 1;
-                dirY = 0;
+            case 3: // Green safety zone extends right, so entry is from left (-1, 0)
+                entryDirection.x = -1;
+                entryDirection.y = 0;
                 break;
         }
         
-        // Calculate the expected entry point coordinates (one step in the direction vector)
-        const expectedEntryX = safetyX + dirX;
-        const expectedEntryY = safetyY + dirY;
+        // Calculate the expected entry point grid position
+        // This is the position adjacent to the safety zone start in the direction of entry
+        const expectedEntryGridX = safetyStart.gridX + entryDirection.x;
+        const expectedEntryGridY = safetyStart.gridY + entryDirection.y;
         
-        console.log(`  Expected entry point at grid (${expectedEntryX}, ${expectedEntryY})`);
+        console.log(`Safety zone start: (${safetyStart.gridX}, ${safetyStart.gridY})`);
+        console.log(`Expected entry point: (${expectedEntryGridX}, ${expectedEntryGridY})`);
         
-        // Find board positions that are close to the expected entry point
-        let bestIdx = -1;
-        let minDistance = Infinity;
+        // Find the board position with EXACTLY these grid coordinates
+        let correctEntryIdx = -1;
         
-        // For Yellow player, we'll enforce position 31 as the entry point
-        // This ensures consistent behavior without bandaid solutions
-        if (playerIdx === 2) {
-            console.log("  === YELLOW PLAYER SAFETY ENTRY POINT ANALYSIS ===");
-            
-            // Skip the coordinate-based search and directly validate position 31
-            bestIdx = 31;
-            
-            // Log the coordinates to confirm they're valid
-            if (BOARD_PATH[31]) {
-                console.log(`  Enforcing Yellow entry at position 31: (${BOARD_PATH[31].gridX}, ${BOARD_PATH[31].gridY})`);
-                console.log(`  This ensures consistent gameplay behavior for the Yellow player`);
-            } else {
-                console.error("  Error: Position 31 does not exist on the board path!");
+        for (let i = 0; i < BOARD_PATH.length; i++) {
+            const pos = BOARD_PATH[i];
+            // Use exact grid coordinate matching, not distance
+            if (pos.gridX === expectedEntryGridX && pos.gridY === expectedEntryGridY) {
+                console.log(`Found exact match at board position ${i}: (${pos.gridX}, ${pos.gridY})`);
+                correctEntryIdx = i;
+                break;
             }
+        }
+        
+        if (correctEntryIdx === -1) {
+            console.error(`Could not find exact match for expected entry point (${expectedEntryGridX}, ${expectedEntryGridY})!`);
+            console.log("Checking nearby positions as fallback...");
             
-            // Remove any special case handling for position 30 in the game code
-            console.log("  Note: Position 30 should NOT be treated as a valid entry point");
+            // If we can't find an exact match, find the nearest board position as a fallback
+            let minDistance = Infinity;
             
-            // Continue to the check and update logic below
-        } else {
-            // Normal handling for other players
             for (let i = 0; i < BOARD_PATH.length; i++) {
-                const pathPos = BOARD_PATH[i];
-                
-                // First priority: exact match of grid coordinates
-                if (pathPos.gridX === expectedEntryX && pathPos.gridY === expectedEntryY) {
-                    console.log(`  Found exact match at board position ${i}`);
-                    bestIdx = i;
-                    break;
-                }
-                
-                // Calculate distance (Euclidean distance works better for this)
+                const pos = BOARD_PATH[i];
                 const distance = Math.sqrt(
-                    Math.pow(pathPos.gridX - expectedEntryX, 2) + 
-                    Math.pow(pathPos.gridY - expectedEntryY, 2)
+                    Math.pow(pos.gridX - expectedEntryGridX, 2) + 
+                    Math.pow(pos.gridY - expectedEntryGridY, 2)
                 );
                 
                 if (distance < minDistance) {
                     minDistance = distance;
-                    bestIdx = i;
+                    correctEntryIdx = i;
                 }
             }
+            
+            console.log(`Falling back to nearest position ${correctEntryIdx} at distance ${minDistance.toFixed(2)}`);
         }
-        
-        // Report findings
-        if (playerIdx !== 2) {
-            console.log(`  Best matching board position: ${bestIdx} at distance ${minDistance.toFixed(2)}`);
-        }
-        console.log(`  Board position coordinates: (${BOARD_PATH[bestIdx].gridX}, ${BOARD_PATH[bestIdx].gridY})`);
         
         // Check if there's a mismatch
-        if (bestIdx !== claimedEntryIdx) {
-            console.warn(`  MISMATCH DETECTED! Claimed: ${claimedEntryIdx}, Actual: ${bestIdx}`);
+        if (correctEntryIdx !== claimedEntryIdx) {
+            console.warn(`MISMATCH DETECTED! Claimed: ${claimedEntryIdx}, Correct: ${correctEntryIdx}`);
+            console.log(`Board position ${claimedEntryIdx} coordinates: (${BOARD_PATH[claimedEntryIdx].gridX}, ${BOARD_PATH[claimedEntryIdx].gridY})`);
+            console.log(`Board position ${correctEntryIdx} coordinates: (${BOARD_PATH[correctEntryIdx].gridX}, ${BOARD_PATH[correctEntryIdx].gridY})`);
             
             // Update the constants at runtime (this won't change the file)
-            PLAYER_START_INFO[playerIdx].safetyEntryIndex = bestIdx;
-            console.log(`  Corrected entry point to: ${bestIdx}`);
+            PLAYER_START_INFO[playerIdx].safetyEntryIndex = correctEntryIdx;
+            console.log(`Corrected entry point to: ${correctEntryIdx}`);
         } else {
-            console.log(`  Entry point ${claimedEntryIdx} is correct`);
+            console.log(`Entry point ${claimedEntryIdx} is correct! Coordinates: (${BOARD_PATH[claimedEntryIdx].gridX}, ${BOARD_PATH[claimedEntryIdx].gridY})`);
         }
     }
     
