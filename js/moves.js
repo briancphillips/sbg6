@@ -457,33 +457,6 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
                     pixelY: BOARD_PATH[currentPos].pixelY
                 };
             }
-            
-            // Check if we're at position 30 for Yellow (position right before the defined entry point)
-            // This is a special case based on grid coordinates, not a hardcoded hack
-            if (pawn.playerIndex === 2 && currentPos === 30 && stepsLeft === 1) {
-                // Compare grid coordinates of position 30 and the safety zone entrance
-                const pos30 = BOARD_PATH[30];
-                const safetyStart = SAFETY_ZONES[2][0];
-                
-                // Calculate distance to safety start
-                const gridDistance = Math.abs(pos30.gridX - safetyStart.gridX) + Math.abs(pos30.gridY - safetyStart.gridY);
-                
-                console.log(`YELLOW GRID CHECK: Position 30 at (${pos30.gridX}, ${pos30.gridY})`);
-                console.log(`YELLOW GRID CHECK: Safety start at (${safetyStart.gridX}, ${safetyStart.gridY})`);
-                console.log(`YELLOW GRID CHECK: Grid distance: ${gridDistance}`);
-                
-                // If the coordinates are close enough, allow entry
-                if (gridDistance <= 2) {  // Allow some tolerance for diagonal adjacency
-                    console.log(`YELLOW FIX: Position 30 is geometrically adjacent to safety zone entrance, allowing entry`);
-                    
-                    return {
-                        positionType: 'entry',  // Mark as at entry point
-                        positionIndex: currentPos,
-                        pixelX: BOARD_PATH[currentPos].pixelX,
-                        pixelY: BOARD_PATH[currentPos].pixelY
-                    };
-                }
-            }
         } else if (currentType === 'safe') {
             // Moving within safety zone
             currentPos++;
@@ -657,10 +630,10 @@ export function executeMove(pawn, destination, endTurnAfter = true) {
             
             // Check for bumping at the end of the slide
             const finalBumpedPawn = getPawnAtBoardIndex(slideEndIndex);
-            if (finalBumpedPawn && finalBumpedPawn.playerIndex !== playerIndex) {
+            if (finalBumpedPawn && finalBumpedPawn !== pawn && finalBumpedPawn.playerIndex !== playerIndex) {
                 sendPawnToStart(finalBumpedPawn);
-                message += ` Bumped ${PLAYERS[finalBumpedPawn.playerIndex].name} at slide end!`;
-                console.log(message);
+                message += ` Bumped another pawn after slide!`;
+                console.log("Unexpected bump after slide!");
             }
         }
     }
