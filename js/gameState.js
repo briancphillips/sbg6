@@ -47,7 +47,7 @@ export function getPawnAtBoardIndex(boardIndex) {
         for (const pawn of player.pawns) { 
             // Note: Position types can be 'start', 'board', 'entry', 'safe', or 'home'
             // Where 'entry' means the pawn is at the safety zone entrance (must enter on next turn)
-            if (pawn.positionType === 'board' && pawn.positionIndex === boardIndex) { 
+            if ((pawn.positionType === 'board' || pawn.positionType === 'entry') && pawn.positionIndex === boardIndex) { 
                 return pawn; 
             } 
         } 
@@ -112,7 +112,7 @@ export function getOpponentPawnsOnBoard(currentPlayerIndex) {
     gameState.players.forEach((player, index) => { 
         if (index !== currentPlayerIndex) { 
             player.pawns.forEach(pawn => { 
-                if (pawn.positionType === 'board') { 
+                if (pawn.positionType === 'board' || pawn.positionType === 'entry') { 
                     opponents.push(pawn); 
                 } 
             }); 

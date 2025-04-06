@@ -605,8 +605,8 @@ export function executeMove(pawn, destination, endTurnAfter = true) {
     const playerIndex = pawn.playerIndex;
     let message = "";
     
-    // Check for bumping opponent pawns when landing on a board square
-    if (destination.positionType === 'board') {
+    // Check for bumping opponent pawns when landing on a board square or safety entry point
+    if (destination.positionType === 'board' || destination.positionType === 'entry') {
         const bumpedPawn = getPawnAtBoardIndex(destination.positionIndex);
         if (bumpedPawn && bumpedPawn.playerIndex !== playerIndex) {
             sendPawnToStart(bumpedPawn);
