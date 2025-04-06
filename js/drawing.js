@@ -257,21 +257,25 @@ export function drawBoard() {
             const sz = SQUARE_SIZE * 0.18;
             
             if (index < 15) {
-                ctx.moveTo(cx - sz, cy + sz*1.5);
-                ctx.lineTo(cx + sz, cy + sz*1.5);
-                ctx.lineTo(cx, cy + sz*1.5 - sz*1.732);
+                // Top row - should point right (east)
+                ctx.moveTo(cx - sz, cy - sz*0.5);
+                ctx.lineTo(cx - sz, cy + sz*0.5);
+                ctx.lineTo(cx - sz + sz*0.866, cy);
             } else if (index < 30) {
-                ctx.moveTo(cx - sz*1.5, cy - sz);
-                ctx.lineTo(cx - sz*1.5, cy + sz);
-                ctx.lineTo(cx - sz*1.5 + sz*1.732, cy);
+                // Right column - should point down (south)
+                ctx.moveTo(cx - sz*0.5, cy - sz);
+                ctx.lineTo(cx + sz*0.5, cy - sz);
+                ctx.lineTo(cx, cy - sz + sz*0.866);
             } else if (index < 45) {
-                ctx.moveTo(cx - sz, cy - sz*1.5);
-                ctx.lineTo(cx + sz, cy - sz*1.5);
-                ctx.lineTo(cx, cy - sz*1.5 + sz*1.732);
+                // Bottom row - should point left (west)
+                ctx.moveTo(cx + sz, cy - sz*0.5);
+                ctx.lineTo(cx + sz, cy + sz*0.5);
+                ctx.lineTo(cx + sz - sz*0.866, cy);
             } else {
-                ctx.moveTo(cx + sz*1.5, cy - sz);
-                ctx.lineTo(cx + sz*1.5, cy + sz);
-                ctx.lineTo(cx + sz*1.5 - sz*1.732, cy);
+                // Left column - should point up (north)
+                ctx.moveTo(cx - sz*0.5, cy + sz);
+                ctx.lineTo(cx + sz*0.5, cy + sz);
+                ctx.lineTo(cx, cy + sz - sz*0.866);
             }
             
             ctx.closePath();
