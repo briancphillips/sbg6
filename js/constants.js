@@ -24,8 +24,8 @@ export const BOARD_LAYOUT = {
         { x: 7, y: 13.5 }     // Green
     ],
     safetyZones: [
-        { x: 2.5, y: 1 },    // Red (moving down towards home)
-        { x: 14, y: 2.5 },   // Blue (moving left towards home)
+        { x: 2, y: 1 },    // Red (moving down towards home)
+        { x: 14, y: 2 },   // Blue (moving left towards home)
         { x: 13, y: 14 },   // Yellow (moving up towards home)
         { x: 1, y: 13 }     // Green (moving right towards home)
     ],
@@ -58,10 +58,10 @@ export function getPlayerCoords(playerIndex) {
 
 // Player start and safety zone info
 export const PLAYER_START_INFO = [ 
-    { exitIndex: 4, safetyEntryIndex: 2 },  // Red - adjusted based on new position
-    { exitIndex: 19, safetyEntryIndex: 14 }, // Blue - adjusted based on new position
-    { exitIndex: 34, safetyEntryIndex: 31 }, // Yellow 
-    { exitIndex: 49, safetyEntryIndex: 46 }  // Green
+    { exitIndex: 4, safetyEntryIndex: 1 },  // Red - adjusted for (2,1) position
+    { exitIndex: 19, safetyEntryIndex: 16 }, // Blue - adjusted for (14,2) position
+    { exitIndex: 34, safetyEntryIndex: 31 }, // Yellow - adjusted for (13,14) position
+    { exitIndex: 49, safetyEntryIndex: 46 }  // Green - corrected based on visual debug overlay
 ];
 
 // Slide information

@@ -207,23 +207,21 @@ export function skipTurnAction() {
 export function handleCanvasClick(event) {
     if (!gameState.currentCard || gameState.gameOver) return;
     
+    // Get mouse position relative to canvas
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const clickX = (event.clientX - rect.left) * scaleX;
-    const clickY = (event.clientY - rect.top) * scaleY;
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
     
-    const currentPlayerIndex = gameState.currentPlayerIndex;
-    const currentCard = gameState.currentCard;
+    console.log(`Canvas click: (${mouseX}, ${mouseY})`);
     
     // Find what was clicked
     let clickedPawn = null;
     let clickedMove = null;
     
-    // Check for clicked pawns
+    // Check if a pawn was clicked
     for (const player of gameState.players) {
         for (const pawn of player.pawns) {
-            if (isClickOnPawn(clickX, clickY, pawn)) {
+            if (isClickOnPawn(mouseX, mouseY, pawn)) {
                 clickedPawn = pawn;
                 break;
             }
@@ -231,22 +229,33 @@ export function handleCanvasClick(event) {
         if (clickedPawn) break;
     }
     
-    // Check for clicked move destinations
-    if (gameState.validMoves.length > 0) {
-        for (const move of gameState.validMoves) {
-            if (move.type === 'move' && isClickOnSquare(clickX, clickY, move.pixelX, move.pixelY)) {
-                clickedMove = move;
-                break;
-            }
+    // Check if a valid move space was clicked
+    for (const move of gameState.validMoves) {
+        if (isClickOnSquare(mouseX, mouseY, move.pixelX, move.pixelY)) {
+            clickedMove = move;
+            break;
         }
     }
     
-    console.log("Click Action:", gameState.currentAction, "Clicked Pawn:", clickedPawn?.id, "Clicked Move:", clickedMove);
+    // Log what was clicked
+    console.log(`Click Action: ${gameState.currentAction} Clicked Pawn: ${clickedPawn ? clickedPawn.id : 'null'} Clicked Move: ${clickedMove ? 'yes' : 'null'}`);
+    
+    // Add debug info for safety zone movement
+    if (clickedPawn && clickedPawn.positionType === 'safe') {
+        console.log(`=== SAFETY ZONE DEBUG: Clicked on pawn ${clickedPawn.id} at safety position ${clickedPawn.positionIndex} ===`);
+        // Display in message area for visibility
+        const originalMessage = gameState.message;
+        gameState.message = `🔍 DEBUG: Safety zone pawn at position ${clickedPawn.positionIndex}`;
+        setTimeout(() => {
+            gameState.message = originalMessage;
+            updateUI();
+        }, 1500);
+    }
     
     // Handle null currentAction - restore proper state
     if (gameState.currentAction === null && gameState.currentCard) {
         // Re-initialize action state based on current card
-        handleCardDraw(currentPlayerIndex, currentCard);
+        handleCardDraw(gameState.currentPlayerIndex, gameState.currentCard);
         
         // Update UI and redraw
         drawGame();
@@ -259,7 +268,7 @@ export function handleCanvasClick(event) {
         case 'select-pawn':
             if (clickedPawn && gameState.selectablePawns.includes(clickedPawn)) {
                 gameState.selectedPawn = clickedPawn;
-                gameState.validMoves = getPossibleMovesForPawn(clickedPawn, currentCard);
+                gameState.validMoves = getPossibleMovesForPawn(clickedPawn, gameState.currentCard);
                 gameState.selectablePawns = [];
                 gameState.currentAction = 'select-move';
                 gameState.message = `Pawn ${clickedPawn.id} selected. Click destination.`;
@@ -276,7 +285,7 @@ export function handleCanvasClick(event) {
                 gameState.message = "Pawn deselected. Select a pawn.";
                 gameState.selectedPawn = null;
                 gameState.validMoves = [];
-                handleCardDraw(currentPlayerIndex, currentCard);
+                handleCardDraw(gameState.currentPlayerIndex, gameState.currentCard);
                 return;
             } else {
                 gameState.message = "Click a valid green destination square.";
@@ -415,7 +424,8 @@ export function handleCanvasClick(event) {
             
         case 'select-7-move2':
             if (clickedMove && gameState.selectedPawn) {
-                executeMove(gameState.selectedPawn, clickedMove);
+                // Make sure to set endTurnAfter=true to end the turn after the second part of a 7 split
+                executeMove(gameState.selectedPawn, clickedMove, true);
                 return;
             } else {
                 gameState.message = "Click a valid green destination square to complete the split 7 move.";

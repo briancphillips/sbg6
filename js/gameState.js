@@ -45,6 +45,8 @@ export const gameState = {
 export function getPawnAtBoardIndex(boardIndex) { 
     for (const player of gameState.players) { 
         for (const pawn of player.pawns) { 
+            // Note: Position types can be 'start', 'board', 'entry', 'safe', or 'home'
+            // Where 'entry' means the pawn is at the safety zone entrance (must enter on next turn)
             if (pawn.positionType === 'board' && pawn.positionIndex === boardIndex) { 
                 return pawn; 
             } 
@@ -55,9 +57,37 @@ export function getPawnAtBoardIndex(boardIndex) {
 
 export function getOwnPawnAtSafeZoneIndex(playerIndex, safeIndex) { 
     if (safeIndex < 0 || safeIndex >= SAFETY_ZONES[playerIndex].length) return null; 
-    return gameState.players[playerIndex].pawns.find(
-        pawn => pawn.positionType === 'safe' && pawn.positionIndex === safeIndex
-    );
+    
+    // Add detailed debug logging to see which pawns are being found
+    console.log(`DETAILED DEBUG: Checking pawns at safety zone ${safeIndex} for player ${playerIndex}`)
+    
+    for (const pawn of gameState.players[playerIndex].pawns) {
+        console.log(`DETAILED DEBUG: Pawn ${pawn.id} is at ${pawn.positionType} position ${pawn.positionIndex}`);
+        
+        if (pawn.positionType === 'safe' && pawn.positionIndex === safeIndex) {
+            console.log(`DETAILED DEBUG: Found pawn ${pawn.id} at safety position ${safeIndex}`);
+            return pawn;
+        }
+    }
+    
+    console.log(`DETAILED DEBUG: No pawn found at safety position ${safeIndex}`);
+    return null;
+}
+
+export function isOccupiedByOwnPawnSafe(playerIndex, targetSafeIndex) { 
+    // Add debug logging to identify why safety zone movement is failing
+    console.log(`Checking if safety zone position ${targetSafeIndex} is occupied for player ${playerIndex}`);
+    
+    const result = getOwnPawnAtSafeZoneIndex(playerIndex, targetSafeIndex) !== null;
+    console.log(`  - Result: ${result ? 'Occupied' : 'Not occupied'}`);
+    
+    // Add additional logging to inspect each pawn's position
+    console.log(`  - DEBUG: Player ${playerIndex} pawns positions:`);
+    gameState.players[playerIndex].pawns.forEach(pawn => {
+        console.log(`    - Pawn ${pawn.id}: ${pawn.positionType} position ${pawn.positionIndex}`);
+    });
+    
+    return result;
 }
 
 export function isOccupiedByOpponent(targetBoardIndex, currentPlayerIndex) { 
@@ -68,10 +98,6 @@ export function isOccupiedByOpponent(targetBoardIndex, currentPlayerIndex) {
 export function isOccupiedByOwnPawnBoard(targetBoardIndex, playerIndex) { 
     const pawn = getPawnAtBoardIndex(targetBoardIndex); 
     return pawn !== null && pawn.playerIndex === playerIndex; 
-}
-
-export function isOccupiedByOwnPawnSafe(playerIndex, targetSafeIndex) { 
-    return getOwnPawnAtSafeZoneIndex(playerIndex, targetSafeIndex) !== null; 
 }
 
 export function sendPawnToStart(pawn) { 

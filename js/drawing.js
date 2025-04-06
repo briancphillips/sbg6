@@ -99,7 +99,9 @@ export function getPixelCoordsForPawn(pawn) {
                 x: startCoord.x + Math.cos(angle) * radiusOffset,
                 y: startCoord.y + Math.sin(angle) * radiusOffset
             };
-        } else if (pawn.positionType === 'board') {
+        } else if (pawn.positionType === 'board' || pawn.positionType === 'entry') {
+            // Both 'board' and 'entry' positions use board coordinates
+            // 'entry' is visually the same as 'board' but with different game logic
             if (pawn.positionIndex >= 0 && pawn.positionIndex < BOARD_PATH.length) {
                 coords = {
                     x: BOARD_PATH[pawn.positionIndex].pixelX,

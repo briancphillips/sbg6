@@ -4,6 +4,7 @@ import { initDrawing, drawGame } from './drawing.js';
 import { gameState, initializeGameState } from './gameState.js';
 import { initializeDeck } from './cards.js';
 import { initUI, updateUI } from './ui.js';
+import { debugSafetyEntries, diagnoseSafetyZones } from './moves.js';
 
 // Initialize the game
 export function initializeGame() {
@@ -24,6 +25,10 @@ export function initializeGame() {
     
     // Initialize the deck
     initializeDeck();
+    
+    // Debug safety zone entries and movements to help identify issues
+    debugSafetyEntries();
+    diagnoseSafetyZones();
     
     // Initialize UI
     initUI({
