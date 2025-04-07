@@ -182,6 +182,38 @@ canvas.clickable {
     filter: brightness(1.1); 
 }
 
+/* Scenario Manager Panel */
+.scenario-panel {
+    font-family: 'Inter', sans-serif;
+}
+
+.scenario-btn {
+    background-color: #4b5563;
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    transition: background-color 0.2s;
+}
+
+.scenario-btn:hover {
+    background-color: #374151;
+}
+
+#scenarioPlayer {
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+}
+
+#toggleScenarioPanel {
+    transition: background-color 0.2s;
+}
+
+#toggleScenarioPanel:hover {
+    background-color: #e5e7eb;
+}
+
 /* Media query for mobile devices */
 @media (max-width: 768px) {
     .game-layout {

@@ -96,7 +96,17 @@ export function isOccupiedByOpponent(targetBoardIndex, currentPlayerIndex) {
 }
 
 export function isOccupiedByOwnPawnBoard(targetBoardIndex, playerIndex) { 
+    // Fix for incorrect parameter order - detect if first param is a number between 0-3 (player index)
+    // and second param is a larger number (board index, typically 0-59)
+    if (targetBoardIndex >= 0 && targetBoardIndex <= 3 && playerIndex > 3) {
+        console.log(`WARNING: Parameters to isOccupiedByOwnPawnBoard appear to be in wrong order! Swapping.`);
+        [targetBoardIndex, playerIndex] = [playerIndex, targetBoardIndex];
+    }
+    
+    console.log(`OCCUPATION CHECK: Board position ${targetBoardIndex}, Player ${playerIndex}`);
     const pawn = getPawnAtBoardIndex(targetBoardIndex); 
+    console.log(`OCCUPATION RESULT: ${pawn ? `Found pawn belonging to player ${pawn.playerIndex}` : 'No pawn found'}`);
+    
     return pawn !== null && pawn.playerIndex === playerIndex; 
 }
 

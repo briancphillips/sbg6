@@ -5,6 +5,7 @@ import { gameState, initializeGameState } from './gameState.js';
 import { initializeDeck } from './cards.js';
 import { initUI, updateUI } from './ui.js';
 import { debugSafetyEntries, diagnoseSafetyZones } from './moves.js';
+import { listScenarios } from './scenarioManager.js';
 
 // Initialize the game
 export function initializeGame() {

@@ -195,7 +195,7 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
         console.log(`Using safety zone movement engine for pawn ${pawn.id} with card ${cardValue}`);
         
         // For testing/debugging, we'll force-allow moves in the safety zone
-        const forceAllowMove = true; // TEMPORARY for debugging
+        const forceAllowMove = false; // Changed from true to false to enforce occupation checks
         
         // Handle standard forward movement
         if (!isNaN(numericCardValue) && numericCardValue > 0 && cardValue !== '4') {
@@ -292,7 +292,7 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
             // Fix: Ensure proper backward movement with wrap-around
             // Adding PATH_LENGTH ensures we avoid negative indices
             const targetIndex = (pawn.positionIndex - 4 + PATH_LENGTH) % PATH_LENGTH;
-            if (!isOccupiedByOwnPawnBoard(targetIndex, playerIndex)) {
+            if (!isOccupiedByOwnPawnBoard(targetIndex, pawn.playerIndex)) {
                 moves.push({
                     type: 'move',
                     positionType: 'board',
@@ -312,7 +312,7 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
             // Fix: Ensure proper backward movement with wrap-around for the card 10's backward 1
             // Adding PATH_LENGTH ensures we avoid negative indices
             const targetIndex = (pawn.positionIndex - 1 + PATH_LENGTH) % PATH_LENGTH;
-            if (!isOccupiedByOwnPawnBoard(targetIndex, playerIndex)) {
+            if (!isOccupiedByOwnPawnBoard(targetIndex, pawn.playerIndex)) {
                 moves.push({
                     type: 'move',
                     positionType: 'board',
@@ -341,7 +341,7 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
     } else if (!isNaN(numericCardValue) && numericCardValue > 0) {
         if (pawn.positionType === 'start' && (cardValue === '1' || cardValue === '2')) {
             const exitIndex = startInfo.exitIndex;
-            if (!isOccupiedByOwnPawnBoard(exitIndex, playerIndex)) {
+            if (!isOccupiedByOwnPawnBoard(exitIndex, pawn.playerIndex)) {
                 moves.push({
                     type: 'move',
                     positionType: 'board',
@@ -496,7 +496,7 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
                 pixelY: BOARD_PATH[currentPos].pixelY,
                 bump: true
             };
-        } else if (isOccupiedByOwnPawnBoard(pawn.playerIndex, currentPos)) {
+        } else if (isOccupiedByOwnPawnBoard(currentPos, pawn.playerIndex)) {
             // Position is occupied by own pawn - invalid move
             return { type: 'invalid' };
         }
@@ -577,6 +577,39 @@ export function executeMove(pawn, destination, endTurnAfter = true) {
     
     const playerIndex = pawn.playerIndex;
     let message = "";
+    
+    // Safety check: Ensure we're not landing on our own pawn
+    if (destination.positionType === 'board' || destination.positionType === 'entry') {
+        if (isOccupiedByOwnPawnBoard(destination.positionIndex, playerIndex)) {
+            console.error(`ERROR: Cannot move to position already occupied by own pawn!`);
+            gameState.message = "Invalid move: space already occupied by your pawn.";
+            
+            // Reset selection state
+            gameState.selectedPawn = null;
+            gameState.validMoves = [];
+            gameState.selectablePawns = [];
+            gameState.targetableOpponents = [];
+            
+            drawGame();
+            updateUI();
+            return; // Abort move
+        }
+    } else if (destination.positionType === 'safe') {
+        if (isOccupiedByOwnPawnSafe(playerIndex, destination.positionIndex)) {
+            console.error(`ERROR: Cannot move to safety position already occupied by own pawn!`);
+            gameState.message = "Invalid move: safety space already occupied by your pawn.";
+            
+            // Reset selection state
+            gameState.selectedPawn = null;
+            gameState.validMoves = [];
+            gameState.selectablePawns = [];
+            gameState.targetableOpponents = [];
+            
+            drawGame();
+            updateUI();
+            return; // Abort move
+        }
+    }
     
     // Check for bumping opponent pawns when landing on a board square or safety entry point
     if (destination.positionType === 'board' || destination.positionType === 'entry') {

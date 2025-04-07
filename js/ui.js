@@ -4,6 +4,7 @@ import { PLAYERS } from './constants.js';
 import { drawGame, isClickOnPawn, isClickOnSquare } from './drawing.js';
 import { getPossibleMovesForPawn, executeMove, executeSorry, executeSwap, checkForAnyValidAction } from './moves.js';
 import { drawCard } from './cards.js';
+import { loadScenario, listScenarios } from './scenarioManager.js';
 
 // Element references
 let canvas;
@@ -36,6 +37,53 @@ export function initUI(elements) {
     if (skipTurnButton) {
         skipTurnButton.addEventListener('click', skipTurnAction);
     }
+    
+    // Initialize scenario manager UI
+    initScenarioManagerUI();
+    
+    // Initial UI update
+    updateUI();
+}
+
+// Initialize the scenario manager UI components
+function initScenarioManagerUI() {
+    // Get elements
+    const toggleButton = document.getElementById('toggleScenarioPanel');
+    const scenarioContent = document.getElementById('scenarioContent');
+    const scenarioButtons = document.querySelectorAll('.scenario-btn');
+    const playerSelect = document.getElementById('scenarioPlayer');
+    
+    if (!toggleButton || !scenarioContent) return;
+    
+    // Toggle scenario panel visibility
+    toggleButton.addEventListener('click', () => {
+        const isHidden = scenarioContent.classList.contains('hidden');
+        
+        if (isHidden) {
+            scenarioContent.classList.remove('hidden');
+            toggleButton.textContent = 'Hide Test Scenarios';
+        } else {
+            scenarioContent.classList.add('hidden');
+            toggleButton.textContent = 'Show Test Scenarios';
+        }
+    });
+    
+    // Add click handlers for scenario buttons
+    scenarioButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const scenarioName = button.getAttribute('data-scenario');
+            const playerIndex = parseInt(playerSelect.value);
+            
+            if (scenarioName) {
+                console.log(`Loading scenario: ${scenarioName} for player ${playerIndex}`);
+                loadScenario(scenarioName, playerIndex);
+            }
+        });
+    });
+    
+    // Log available scenarios to console for reference
+    console.log('Scenario Manager initialized.');
+    listScenarios();
 }
 
 // Update UI elements based on game state
