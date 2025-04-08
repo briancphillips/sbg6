@@ -273,6 +273,12 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
                 return [];
             }
             
+            // Check if the target safety zone position is already occupied by own pawn
+            if (isOccupiedByOwnPawnSafe(playerIndex, stepCount)) {
+                console.log(`Invalid move: Safety zone position ${stepCount} already occupied by own pawn`);
+                return [];
+            }
+            
             // Valid move into the safety zone
             return [{
                 type: 'move',
@@ -444,6 +450,34 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
             
             // Check if we've landed exactly on the safety entry point with the last step
             if (currentPos === startInfo.safetyEntryIndex && stepsLeft === 1) {
+                console.log(`ENTRY CHECK: Validating move to safety entry point ${currentPos} for player ${pawn.playerIndex}`);
+                
+                // Check for pawns with positionType 'entry' at this index
+                let entryOccupied = false;
+                for (const player of gameState.players) {
+                    if (player.index === pawn.playerIndex) {
+                        console.log(`ENTRY CHECK: Checking player ${player.index}'s pawns`);
+                        
+                        for (const otherPawn of player.pawns) {
+                            console.log(`ENTRY CHECK: Pawn ${otherPawn.id} is at ${otherPawn.positionType} position ${otherPawn.positionIndex}`);
+                            
+                            if (otherPawn !== pawn && 
+                                (otherPawn.positionType === 'entry' || 
+                                 (otherPawn.positionType === 'board' && otherPawn.positionIndex === currentPos)) && 
+                                otherPawn.positionIndex === currentPos) {
+                                
+                                console.log(`Invalid move: Entry point ${currentPos} already occupied by own pawn`);
+                                entryOccupied = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (entryOccupied) {
+                    return { type: 'invalid' };
+                }
+                
                 // Log detailed information about this safety entry
                 console.log(`Landed on safety entry point at ${currentPos}, marking as 'entry'`);
                 console.log(`SAFETY ENTRY DEBUG: Player ${pawn.playerIndex} (${PLAYERS[pawn.playerIndex].name})`);
@@ -499,6 +533,48 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
         } else if (isOccupiedByOwnPawnBoard(currentPos, pawn.playerIndex)) {
             // Position is occupied by own pawn - invalid move
             return { type: 'invalid' };
+        }
+        
+        // Special case: Check if we're landing on the safety entry point and if another
+        // pawn is already there with 'entry' position type
+        const isAtSafetyEntry = startInfo && currentPos === startInfo.safetyEntryIndex;
+        
+        if (isAtSafetyEntry) {
+            console.log(`ENTRY CHECK: Validating move to safety entry point ${currentPos} for player ${pawn.playerIndex}`);
+            
+            // Check for pawns with positionType 'entry' at this index
+            let entryOccupied = false;
+            for (const player of gameState.players) {
+                if (player.index === pawn.playerIndex) {
+                    console.log(`ENTRY CHECK: Checking player ${player.index}'s pawns`);
+                    
+                    for (const otherPawn of player.pawns) {
+                        console.log(`ENTRY CHECK: Pawn ${otherPawn.id} is at ${otherPawn.positionType} position ${otherPawn.positionIndex}`);
+                        
+                        if (otherPawn !== pawn && 
+                            (otherPawn.positionType === 'entry' || 
+                             (otherPawn.positionType === 'board' && otherPawn.positionIndex === currentPos)) && 
+                            otherPawn.positionIndex === currentPos) {
+                            
+                            console.log(`Invalid move: Entry point ${currentPos} already occupied by own pawn`);
+                            entryOccupied = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (entryOccupied) {
+                return { type: 'invalid' };
+            }
+            
+            // If we get here, this is a valid entry position
+            return {
+                positionType: 'entry',  // Mark as at entry point
+                positionIndex: currentPos,
+                pixelX: BOARD_PATH[currentPos].pixelX,
+                pixelY: BOARD_PATH[currentPos].pixelY
+            };
         }
         
         // Valid move to board position
