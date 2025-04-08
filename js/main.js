@@ -3,9 +3,9 @@ import { initializeBoardPaths } from "./board.js";
 import { initDrawing, drawGame } from "./drawing.js";
 import { gameState, initializeGameState } from "./gameState.js";
 import { initializeDeck } from "./cards.js";
-import { initUI, updateUI } from "./ui.js";
+import { initUI, updateUI, determineActionsForCard } from "./ui.js";
 import { debugSafetyEntries, diagnoseSafetyZones } from "./moves.js";
-import { listScenarios } from "./scenarioManager.js";
+import { listScenarios, loadScenarioState } from "./scenarioManager.js";
 import { aiTakeTurn } from "./ai.js"; // Import AI logic
 import { connect, joinRoom, createRoom, disconnect } from "./network.js"; // Import network module
 
@@ -318,6 +318,53 @@ function handleModeChange() {
   }
 }
 
+// Function to handle scenario loading requests from UI
+function handleLoadScenarioRequest(event) {
+  const { scenarioName, playerIndexOrConfig } = event.detail;
+  console.log(`Main: Handling scenario load request for ${scenarioName}`);
+
+  // 1. Initialize a clean local game state
+  // Use default player types (Player 0 Human, others AI)
+  initializeGame(); // This sets mode to local, initializes state, UI, drawing
+
+  // We might need a very small delay to ensure DOM/UI elements are ready
+  // after initializeGame before applying scenario state, although often not needed.
+  // setTimeout(() => {
+  // 2. Apply the specific scenario state modifications
+  const stateLoaded = loadScenarioState(scenarioName, playerIndexOrConfig);
+
+  if (stateLoaded) {
+    // 3. Determine possible actions based on the scenario state
+    if (gameState.currentCard && gameState.currentPlayerIndex !== undefined) {
+      console.log("Main: Determining actions for loaded scenario...");
+      determineActionsForCard(
+        gameState.currentPlayerIndex,
+        gameState.currentCard
+      );
+    } else {
+      console.log(
+        "Main: Scenario loaded without a current card, skipping action determination."
+      );
+      // Ensure action state is clear if no card
+      gameState.currentAction = null;
+      gameState.selectablePawns = [];
+      gameState.validMoves = [];
+    }
+
+    // 4. Refresh the display with the final scenario state and actions
+    console.log("Main: Refreshing display for scenario...");
+    updateUI("local"); // Ensure UI knows it's local mode
+    drawGame();
+
+    // 5. If the scenario sets an AI player's turn, trigger it
+    checkAndTriggerAI(); // Check if the current player in the scenario is AI
+  } else {
+    console.error("Main: Failed to apply scenario state.");
+    // Optionally show an error to the user
+  }
+  // }, 10); // Small delay (e.g., 10ms) if needed
+}
+
 // Setup event listeners when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
   gameSetupScreen = document.getElementById("gameSetupScreen");
@@ -390,4 +437,7 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Create Room button clicked");
     startOnlineGame(false); // Initiate connection with intent to create
   });
+
+  // Add the new listener for scenario load requests
+  window.addEventListener("loadScenarioRequest", handleLoadScenarioRequest);
 });

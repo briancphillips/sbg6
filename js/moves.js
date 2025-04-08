@@ -535,6 +535,7 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
 
   // Normal step-by-step movement
   while (stepsLeft > 0) {
+    let intermediatePos;
     // Move forward one step
     if (currentType === "board") {
       // Check if the NEXT position would be the safety entry point for this player
@@ -543,16 +544,34 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
       // Handle regular movement (no automatic entry into safety zone)
       // Handle special wrap-around from position 59 to position 0
       if (currentPos === 59) {
-        currentPos = 0;
+        intermediatePos = 0;
       } else {
         // Standard increment for other positions
-        currentPos = nextPos;
+        intermediatePos = nextPos;
       }
+      currentPos = intermediatePos; // Update currentPos for the next iteration/final check
 
       // Log each step for debugging wrap-around
       console.log(
         `Step ${steps - stepsLeft + 1}: Now at board position ${currentPos}`
       );
+
+      // *** ADDED INTERMEDIATE OCCUPATION CHECK ***
+      // Check occupation only if this is NOT the final step (the final step is checked later)
+      if (stepsLeft > 1) {
+        // Need to check specifically for other pawns of the same player
+        if (isOccupiedByOwnPawnBoard(currentPos, pawn.playerIndex)) {
+          // Check if the occupier is the pawn itself (shouldn't happen, but safe check)
+          const occupier = getPawnAtBoardIndex(currentPos);
+          if (!occupier || occupier.id !== pawn.id) {
+            console.log(
+              `Invalid move: Path blocked by own pawn at intermediate step ${currentPos}`
+            );
+            return { type: "invalid" };
+          }
+        }
+      }
+      // *** END INTERMEDIATE CHECK ***
 
       // Check if we've landed exactly on the safety entry point with the last step
       if (currentPos === startInfo.safetyEntryIndex && stepsLeft === 1) {
@@ -614,8 +633,20 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
         };
       }
     } else if (currentType === "safe") {
-      // Moving within safety zone
-      currentPos++;
+      const intermediateSafePos = currentPos + 1;
+
+      // *** ADDED INTERMEDIATE OCCUPATION CHECK FOR SAFETY ZONE ***
+      if (stepsLeft > 1 && intermediateSafePos < SAFETY_ZONE_LENGTH) {
+        if (isOccupiedByOwnPawnSafe(pawn.playerIndex, intermediateSafePos)) {
+          console.log(
+            `Invalid move: Safety path blocked by own pawn at intermediate step ${intermediateSafePos}`
+          );
+          return { type: "invalid" };
+        }
+      }
+      // *** END INTERMEDIATE CHECK ***
+
+      currentPos = intermediateSafePos; // Update position
       console.log(
         `Step ${steps - stepsLeft + 1}: Now at safety position ${currentPos}`
       );
@@ -716,6 +747,14 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
       };
     }
 
+    // Move stays on the main board path
+    console.log(`Move stays on main board path to index ${currentPos}`);
+    if (isOccupiedByOwnPawnBoard(currentPos, pawn.playerIndex)) {
+      console.log(
+        `Invalid move: Target board position ${currentPos} occupied by own pawn`
+      );
+      return { type: "invalid" };
+    }
     // Valid move to board position
     return {
       positionType: "board",

@@ -14,7 +14,7 @@ import {
   checkForAnyValidAction,
 } from "./moves.js";
 import { drawCard, initializeDeck } from "./cards.js";
-import { loadScenario, listScenarios } from "./scenarioManager.js";
+import { listScenarios } from "./scenarioManager.js";
 import {
   requestDrawCard,
   requestSelectPawn,
@@ -185,13 +185,24 @@ function initScenarioManagerUI() {
       const scenarioName = button.getAttribute("data-scenario");
       const playerIndex = parseInt(playerSelect.value);
 
-      if (scenarioName && currentGameMode === "local") {
+      if (currentGameMode === "local") {
         // Only allow in local mode
-        console.log(
-          `Loading scenario: ${scenarioName} for player ${playerIndex}`
+        console.log(`Requesting scenario load: ${scenarioName}`);
+        // Dispatch an event for main.js to handle the loading process
+        window.dispatchEvent(
+          new CustomEvent("loadScenarioRequest", {
+            detail: {
+              scenarioName: scenarioName,
+              playerIndexOrConfig: playerIndex,
+            },
+          })
         );
-        loadScenario(scenarioName, playerIndex);
-      } else if (currentGameMode !== "local") {
+        // Hide panel after selection (optional)
+        // if (!scenarioContent.classList.contains("hidden")) {
+        //     scenarioContent.classList.add("hidden");
+        //     toggleButton.textContent = "Show Test Scenarios";
+        // }
+      } else {
         console.warn("Scenarios can only be loaded in Local Game mode.");
       }
     });
@@ -389,10 +400,10 @@ export function performDrawCard(playerIndex) {
 }
 
 // Determines the possible actions (selectable pawns, moves, etc.) based on the drawn card
-// This function should remain mostly the same, as it populates gameState for UI feedback
-// It is called locally after drawing in local mode, or potentially by server updates in online mode?
-// For now, assume it's only called locally.
-function determineActionsForCard(playerIndex, card) {
+// This function updates the local gameState to provide UI feedback (highlighting)
+// It does NOT execute moves directly. Called after drawing locally.
+// Export needed for main.js to call it when loading scenarios.
+export function determineActionsForCard(playerIndex, card) {
   // Reset selection state
   gameState.selectedPawn = null;
   gameState.selectablePawns = [];
@@ -678,12 +689,18 @@ export function performMoveSelection(playerIndex, move) {
       executeMove(gameState.selectedPawn, move);
       break;
     case "select-7-move1": // Player chose move for first pawn of split-7
-      const moveValue = move.value; // Value of the chosen move (1 to 7)
-      executeMove(gameState.selectedPawn, move); // Execute the first part of the move (advances turn if moveValue == 7)
+      const moveValue = move.steps; // Use the 'steps' property added earlier
+      console.log(
+        `Split-7: Part 1 executed (${moveValue} steps). Calculating remaining.`
+      );
+      // *** Pass false for endTurnAfter for the first part of split ***
+      executeMove(gameState.selectedPawn, move, false);
 
-      // Check if turn already advanced (means move was for full 7)
+      // Check if turn already advanced by executeMove (shouldn't happen now)
+      // or if game ended
       if (gameState.currentPlayerIndex === playerIndex && !gameState.gameOver) {
         const remainingValue = 7 - moveValue;
+        console.log(`Split-7: Remaining value = ${remainingValue}`);
         if (remainingValue > 0) {
           // Need to select second pawn
           gameState.splitData.firstPawn = gameState.selectedPawn;
@@ -691,37 +708,67 @@ export function performMoveSelection(playerIndex, move) {
           gameState.selectedPawn = null; // Clear selection for next pawn
           gameState.validMoves = []; // Clear moves
           gameState.selectablePawns = []; // Clear old selectable pawns
+          console.log("Split-7: Finding other pawns for second move...");
 
-          // Find selectable pawns for the second move (excluding the first pawn)
+          // Find OTHER selectable pawns for the second move
           gameState.players[playerIndex].pawns.forEach((pawn) => {
+            console.log(
+              `  - Checking Pawn ID ${pawn.id} (Type: ${pawn.positionType})`
+            );
             if (
               pawn !== gameState.splitData.firstPawn &&
-              (pawn.positionType === "board" || pawn.positionType === "safe") &&
-              getPossibleMovesForPawn(pawn, remainingValue.toString()).length >
-                0
+              (pawn.positionType === "board" || pawn.positionType === "safe")
             ) {
-              gameState.selectablePawns.push(pawn);
+              const secondMoves = getPossibleMovesForPawn(
+                pawn,
+                remainingValue.toString()
+              );
+              console.log(
+                `    - Can Pawn ${pawn.id} move ${remainingValue} steps? ${
+                  secondMoves.length > 0 ? "Yes" : "No"
+                }`
+              );
+              if (secondMoves.length > 0) {
+                gameState.selectablePawns.push(pawn);
+              }
             }
           });
 
+          console.log(
+            `Split-7: Found ${gameState.selectablePawns.length} other pawn(s) for second move.`
+          );
+
           if (gameState.selectablePawns.length > 0) {
+            // If OTHER pawns CAN move, force selection of one of them
+            console.log("Split-7: Transitioning to select-7-pawn2 state.");
             gameState.currentAction = "select-7-pawn2";
             gameState.message = `First move done (${moveValue}). Select second pawn for remaining ${remainingValue}.`;
+            // Update UI to show options for second pawn
+            updateUI();
+            drawGame();
           } else {
-            // No valid second pawn/move, turn ends (should have been handled by executeMove's nextTurn call)
+            // If NO OTHER pawn can make the remaining move, the turn ends.
+            // The first pawn does NOT get to use the remaining steps.
+            console.log(
+              "Split-7: No other pawn can make the second move. Ending turn."
+            );
             gameState.message = `First move done (${moveValue}). No valid second move. Turn ends.`;
             console.log(
-              "No valid second pawn/move for 7-split. Turn should end."
+              "No valid second pawn/move for 7-split. Force ending turn."
             );
-            // Force turn end if executeMove didn't? Unlikely needed.
-            // window.dispatchEvent(new Event("nextTurn"));
+            window.dispatchEvent(new Event("nextTurn")); // Force turn end
           }
+        } else {
+          // Move used exactly 7 steps
+          console.log(
+            "Split-7: Used exactly 7 steps in one move. Ending turn."
+          );
+          window.dispatchEvent(new Event("nextTurn")); // Force turn end if exactly 7 steps used
         }
-        // If remainingValue is 0, executeMove already advanced the turn
       }
       break;
     case "select-7-move2": // Player chose move for second pawn of split-7
-      executeMove(gameState.selectedPawn, move);
+      executeMove(gameState.selectedPawn, move, true); // End turn after second move
       // Turn ends (handled by executeMove)
       gameState.message = `Completed 7-split move.`;
       break;
