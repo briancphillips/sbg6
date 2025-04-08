@@ -3,8 +3,8 @@ import { gameState } from "./gameState.js";
 import { PLAYERS } from "./constants.js";
 import {
   performDrawCard,
-  performPawnSelection,
   performMoveSelection,
+  executeLocalPawnSelection,
 } from "./ui.js";
 import { executeSorry, executeSwap } from "./moves.js"; // Keep direct execute for Sorry/Swap for now
 
@@ -97,7 +97,7 @@ async function chooseAndExecuteAIAction(playerIndex) {
             `AI (${playerName}) choosing Pawn ${chosenPawn.id} for state ${currentAction}`
           );
           await delay(AI_EXECUTION_DELAY); // Delay before pawn selection
-          performPawnSelection(playerIndex, chosenPawn);
+          executeLocalPawnSelection(playerIndex, chosenPawn);
           actionExecuted = true;
         } else {
           console.error(
@@ -108,6 +108,7 @@ async function chooseAndExecuteAIAction(playerIndex) {
 
       // === Move Selection Required ===
       case "select-move":
+      case "select-11-action": // Handles move part of 11
       case "select-7-move1":
       case "select-7-move2":
         if (gameState.validMoves.length > 0) {
@@ -127,46 +128,26 @@ async function chooseAndExecuteAIAction(playerIndex) {
         break;
 
       // === Target Selection Required ===
-      case "select-11-action": // Special: Can be move or swap
-        if (gameState.validMoves.length > 0) {
-          const chosenMove = gameState.validMoves[0]; // Prioritize move
-          console.log(`AI (${playerName}) choosing Move 11`);
-          await delay(AI_EXECUTION_DELAY);
-          performMoveSelection(playerIndex, chosenMove);
-          actionExecuted = true;
-        } else if (
-          gameState.targetableOpponents.length > 0 &&
-          gameState.selectedPawn
-        ) {
-          const targetPawn = gameState.targetableOpponents[0]; // Choose swap if move not possible
-          console.log(
-            `AI (${playerName}) choosing Swap with Pawn ${targetPawn.id}`
-          );
-          await delay(AI_EXECUTION_DELAY);
-          executeSwap(gameState.selectedPawn, targetPawn);
-          actionExecuted = true;
-        } else {
-          console.error(
-            `AI (${playerName}) Error: In state ${currentAction} but no valid moves or swaps!`
-          );
-        }
-        break;
-
+      case "select-11-swap-target": // Handles swap part of 11 (if only swap is possible)
       case "select-sorry-target":
-        if (
-          gameState.targetableOpponents.length > 0 &&
-          gameState.selectedPawn
-        ) {
-          const targetPawn = gameState.targetableOpponents[0];
+        const targets = gameState.targetableOpponents;
+        if (targets.length > 0 && gameState.selectedPawn) {
+          const targetPawn = targets[0];
+          const actionName =
+            currentAction === "select-sorry-target" ? "Sorry!" : "Swap";
           console.log(
-            `AI (${playerName}) choosing Sorry! target: Pawn ${targetPawn.id}`
+            `AI (${playerName}) choosing ${actionName} target: Pawn ${targetPawn.id}`
           );
           await delay(AI_EXECUTION_DELAY);
-          executeSorry(gameState.selectedPawn, targetPawn);
+          if (actionName === "Sorry!") {
+            executeSorry(gameState.selectedPawn, targetPawn);
+          } else {
+            executeSwap(gameState.selectedPawn, targetPawn);
+          }
           actionExecuted = true;
         } else {
           console.error(
-            `AI (${playerName}) Error: In state ${currentAction} but no targetable opponents!`
+            `AI (${playerName}) Error: In state ${currentAction} but no targetable opponents or no pawn selected!`
           );
         }
         break;

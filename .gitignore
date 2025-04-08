@@ -1,0 +1,34 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# Editor Directories and Files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-project
+*.sublime-workspace
+
+# Build Output (if applicable)
+dist/
+build/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log 

@@ -1,1 +1,0 @@
-pawns are still being allowed to land on their own occupied space

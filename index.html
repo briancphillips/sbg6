@@ -15,7 +15,7 @@
     <div class="container mx-auto max-w-6xl px-4">
       <h1 class="game-title text-center">Sorry!</h1>
 
-      <!-- Game Setup Screen (Added) -->
+      <!-- Game Setup Screen -->
       <div
         id="gameSetupScreen"
         class="game-setup bg-white p-6 rounded-lg shadow-md max-w-md mx-auto text-center"
@@ -31,25 +31,24 @@
                 type="radio"
                 name="gameMode"
                 value="local"
-                class="mr-2"
+                class="mr-2 game-mode-radio"
                 checked
               />
               Local Game
             </label>
-            <label class="flex items-center text-gray-400 cursor-not-allowed">
+            <label class="flex items-center">
               <input
                 type="radio"
                 name="gameMode"
                 value="online"
-                class="mr-2"
-                disabled
+                class="mr-2 game-mode-radio"
               />
-              Online Game (Coming Soon)
+              Online Game
             </label>
           </div>
         </div>
 
-        <!-- Local Player Setup (Initially Hidden, shown for Local Game) -->
+        <!-- Local Player Setup (Initially Shown) -->
         <div id="localPlayerSetup" class="mb-4">
           <h3 class="text-lg font-medium mb-2">Player Setup (Local)</h3>
           <p class="text-sm text-gray-600 mb-3">
@@ -85,8 +84,61 @@
           </div>
         </div>
 
-        <!-- Start Game Button -->
-        <button id="startGameButton" class="start-game-btn">Start Game</button>
+        <!-- Online Game Setup (Initially Hidden) -->
+        <div id="onlineGameSetup" class="mb-4 hidden">
+          <h3 class="text-lg font-medium mb-2">Online Game Setup</h3>
+          <div class="mb-3">
+            <label
+              for="playerNameInput"
+              class="block text-sm font-medium text-gray-700"
+              >Your Name:</label
+            >
+            <input
+              type="text"
+              id="playerNameInput"
+              name="playerName"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              placeholder="Enter your name"
+            />
+          </div>
+          <div class="mb-3">
+            <label
+              for="roomCodeInput"
+              class="block text-sm font-medium text-gray-700"
+              >Room Code:</label
+            >
+            <input
+              type="text"
+              id="roomCodeInput"
+              name="roomCode"
+              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              placeholder="Enter code to join"
+            />
+          </div>
+          <div class="flex justify-center space-x-3">
+            <button
+              id="joinRoomButton"
+              class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Join Room
+            </button>
+            <button
+              id="createRoomButton"
+              class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              Create Room
+            </button>
+          </div>
+          <div
+            id="onlineStatusMessage"
+            class="mt-3 text-sm text-gray-600"
+          ></div>
+        </div>
+
+        <!-- Start Game Button (for Local Game mode) -->
+        <button id="startGameButton" class="start-game-btn">
+          Start Local Game
+        </button>
       </div>
 
       <!-- Main Game Layout (Initially Hidden) -->
@@ -99,6 +151,16 @@
         <!-- Fixed width sidebar -->
         <div class="sidebar">
           <div id="infoPanel" class="info-panel">
+            <!-- Connection Status (for Online mode) -->
+            <div id="connectionStatus" class="mb-2 text-sm"></div>
+            <!-- Player List (for Online mode) -->
+            <div id="playerListContainer" class="mb-3 hidden">
+              <h4 class="text-base font-semibold mb-1">Players Online:</h4>
+              <ul id="playerList" class="list-disc list-inside text-sm">
+                <!-- Player items will be added here -->
+              </ul>
+            </div>
+
             <p class="text-lg font-semibold">
               Current Player: <span id="currentPlayerName">Red</span
               ><span id="currentPlayerColor" class="player-indicator"></span>
@@ -170,6 +232,8 @@
       </div>
     </div>
 
+    <!-- Socket.IO Client Library -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <!-- Load the game as a module -->
     <script type="module" src="js/main.js"></script>
   </body>
