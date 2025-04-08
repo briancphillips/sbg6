@@ -1,66 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sorry! Game Clone</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link href="css/styles.css" rel="stylesheet">
-</head>
-<body class="bg-gray-100">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link href="css/styles.css" rel="stylesheet" />
+  </head>
+  <body class="bg-gray-100">
     <div class="container mx-auto max-w-6xl px-4">
-        <h1 class="game-title text-center">Sorry!</h1>
+      <h1 class="game-title text-center">Sorry!</h1>
 
-        <div class="game-layout">
-            <!-- Canvas in a fixed position container -->
-            <div class="canvas-container">
-                <canvas id="sorryCanvas" width="600" height="600"></canvas>
-            </div>
-            
-            <!-- Fixed width sidebar -->
-            <div class="sidebar">
-                <div id="infoPanel" class="info-panel">
-                    <p class="text-lg font-semibold">Current Player: <span id="currentPlayerName">Red</span><span id="currentPlayerColor" class="player-indicator"></span></p>
-                    <p>Card Drawn: <span id="cardDrawn" class="font-mono text-lg">-</span></p>
-                    <div id="messageArea" class="mt-2 text-base text-indigo-700 font-medium"></div>
-                    <div id="winMessage" class="mt-2 text-xl font-bold text-green-600"></div>
-                </div>
-                <div class="game-controls flex flex-col items-center mt-6">
-                    <button id="drawCardButton">Draw Card</button>
-                    <button id="skipTurnButton" class="mt-2">Skip Turn (Debug)</button>
-                    <button id="resetButton" class="mt-4 hidden">Play Again?</button>
-                    
-                    <!-- Debug Scenario Panel (Collapsible) -->
-                    <div class="scenario-panel mt-6 w-full">
-                        <button id="toggleScenarioPanel" class="w-full bg-gray-200 text-gray-700 py-1 px-2 text-sm rounded">
-                            Show Test Scenarios
-                        </button>
-                        <div id="scenarioContent" class="hidden bg-gray-100 p-3 mt-1 rounded text-sm">
-                            <h3 class="font-semibold text-center mb-2">Test Scenarios</h3>
-                            <div class="grid grid-cols-1 gap-2">
-                                <button class="scenario-btn" data-scenario="safetyEntryCollision">Safety Entry Collision</button>
-                                <button class="scenario-btn" data-scenario="safetyZoneOccupation">Safety Zone Occupation</button>
-                                <button class="scenario-btn" data-scenario="slideAndBump">Slide and Bump</button>
-                                <button class="scenario-btn" data-scenario="splitCard7">Split Card 7</button>
-                            </div>
-                            <div class="mt-3">
-                                <label class="block text-xs">Player:</label>
-                                <select id="scenarioPlayer" class="w-full text-xs p-1 mb-2">
-                                    <option value="0">Red</option>
-                                    <option value="1">Blue</option>
-                                    <option value="2">Yellow</option>
-                                    <option value="3">Green</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <!-- Game Setup Screen (Added) -->
+      <div
+        id="gameSetupScreen"
+        class="game-setup bg-white p-6 rounded-lg shadow-md max-w-md mx-auto text-center"
+      >
+        <h2 class="text-xl font-semibold mb-4">Game Setup</h2>
+
+        <!-- Game Mode Selection -->
+        <div class="mb-4">
+          <label class="block text-lg mb-2">Select Game Mode:</label>
+          <div class="flex justify-center space-x-4">
+            <label class="flex items-center">
+              <input
+                type="radio"
+                name="gameMode"
+                value="local"
+                class="mr-2"
+                checked
+              />
+              Local Game
+            </label>
+            <label class="flex items-center text-gray-400 cursor-not-allowed">
+              <input
+                type="radio"
+                name="gameMode"
+                value="online"
+                class="mr-2"
+                disabled
+              />
+              Online Game (Coming Soon)
+            </label>
+          </div>
         </div>
+
+        <!-- Local Player Setup (Initially Hidden, shown for Local Game) -->
+        <div id="localPlayerSetup" class="mb-4">
+          <h3 class="text-lg font-medium mb-2">Player Setup (Local)</h3>
+          <p class="text-sm text-gray-600 mb-3">
+            Player 1 (Red) is always Human.
+          </p>
+          <div class="space-y-2">
+            <!-- Player 2 (Blue) -->
+            <div class="flex justify-between items-center">
+              <span class="font-medium text-blue-600">Player 2 (Blue):</span>
+              <select name="playerType2" class="player-type-select">
+                <option value="human">Human</option>
+                <option value="ai" selected>AI</option>
+              </select>
+            </div>
+            <!-- Player 3 (Yellow) -->
+            <div class="flex justify-between items-center">
+              <span class="font-medium text-yellow-600"
+                >Player 3 (Yellow):</span
+              >
+              <select name="playerType3" class="player-type-select">
+                <option value="human">Human</option>
+                <option value="ai" selected>AI</option>
+              </select>
+            </div>
+            <!-- Player 4 (Green) -->
+            <div class="flex justify-between items-center">
+              <span class="font-medium text-green-600">Player 4 (Green):</span>
+              <select name="playerType4" class="player-type-select">
+                <option value="human">Human</option>
+                <option value="ai" selected>AI</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Start Game Button -->
+        <button id="startGameButton" class="start-game-btn">Start Game</button>
+      </div>
+
+      <!-- Main Game Layout (Initially Hidden) -->
+      <div class="game-layout hidden">
+        <!-- Canvas in a fixed position container -->
+        <div class="canvas-container">
+          <canvas id="sorryCanvas" width="600" height="600"></canvas>
+        </div>
+
+        <!-- Fixed width sidebar -->
+        <div class="sidebar">
+          <div id="infoPanel" class="info-panel">
+            <p class="text-lg font-semibold">
+              Current Player: <span id="currentPlayerName">Red</span
+              ><span id="currentPlayerColor" class="player-indicator"></span>
+            </p>
+            <p>
+              Card Drawn:
+              <span id="cardDrawn" class="font-mono text-lg">-</span>
+            </p>
+            <div
+              id="messageArea"
+              class="mt-2 text-base text-indigo-700 font-medium"
+            ></div>
+            <div
+              id="winMessage"
+              class="mt-2 text-xl font-bold text-green-600"
+            ></div>
+          </div>
+          <div class="game-controls flex flex-col items-center mt-6">
+            <button id="drawCardButton">Draw Card</button>
+            <button id="skipTurnButton" class="mt-2">Skip Turn (Debug)</button>
+            <button id="resetButton" class="mt-4 hidden">Play Again?</button>
+
+            <!-- Debug Scenario Panel (Collapsible) -->
+            <div class="scenario-panel mt-6 w-full">
+              <button
+                id="toggleScenarioPanel"
+                class="w-full bg-gray-200 text-gray-700 py-1 px-2 text-sm rounded"
+              >
+                Show Test Scenarios
+              </button>
+              <div
+                id="scenarioContent"
+                class="hidden bg-gray-100 p-3 mt-1 rounded text-sm"
+              >
+                <h3 class="font-semibold text-center mb-2">Test Scenarios</h3>
+                <div class="grid grid-cols-1 gap-2">
+                  <button
+                    class="scenario-btn"
+                    data-scenario="safetyEntryCollision"
+                  >
+                    Safety Entry Collision
+                  </button>
+                  <button
+                    class="scenario-btn"
+                    data-scenario="safetyZoneOccupation"
+                  >
+                    Safety Zone Occupation
+                  </button>
+                  <button class="scenario-btn" data-scenario="slideAndBump">
+                    Slide and Bump
+                  </button>
+                  <button class="scenario-btn" data-scenario="splitCard7">
+                    Split Card 7
+                  </button>
+                </div>
+                <div class="mt-3">
+                  <label class="block text-xs">Player:</label>
+                  <select id="scenarioPlayer" class="w-full text-xs p-1 mb-2">
+                    <option value="0">Red</option>
+                    <option value="1">Blue</option>
+                    <option value="2">Yellow</option>
+                    <option value="3">Green</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Load the game as a module -->
     <script type="module" src="js/main.js"></script>
-</body>
+  </body>
 </html>
