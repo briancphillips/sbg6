@@ -115,10 +115,6 @@ io.on("connection", (socket) => {
       // Initialize deck, set first player, etc. on room.gameState
       // Then emit initial gameStateUpdate and yourTurn
       console.log(`Room ${roomId} is full. Starting game...`);
-      // room.gameState = initializeGame(...)
-      // io.to(roomId).emit("gameStateUpdate", room.gameState);
-      // const firstPlayerSocketId = room.playerOrder[room.gameState.currentPlayerIndex];
-      // io.to(firstPlayerSocketId).emit("yourTurn", {}); // Signal turn start
       io.to(roomId).emit("message", "Game starting!");
     }
   });
@@ -144,22 +140,6 @@ io.on("connection", (socket) => {
       `Received action from ${playerName} (Player ${playerInfo.playerIndex}) in room ${roomId}:`,
       action
     );
-
-    // --- === Server-Side Action Validation & Execution === ---
-    // 1. Check if it's the player's turn (room.gameState.currentPlayerIndex === playerInfo.playerIndex)
-    // 2. Validate action.type and action.payload against server rules and room.gameState
-    //    e.g., validateMoveServer(room.gameState, playerInfo.playerIndex, action.payload.moveDetails)
-    // 3. If valid:
-    //    a. Update room.gameState (e.g., executeMoveServer(room.gameState, ...))
-    //    b. Check for win condition (checkForWinServer(room.gameState))
-    //    c. If win: emit 'gameOver', update room state.
-    //    d. If no win: Determine if turn ends. If so, update currentPlayerIndex.
-    //    e. Broadcast 'gameStateUpdate' to everyone in the room: io.to(roomId).emit('gameStateUpdate', room.gameState);
-    //    f. If turn ended, emit 'yourTurn' to the *new* current player: io.to(newPlayerSocketId).emit('yourTurn', {});
-    //    g. Emit 'message' for significant events (e.g., pawn bumped)
-    // 4. If invalid:
-    //    a. Emit 'gameError' back to the sender: socket.emit('gameError', 'Invalid move: ...');
-    // --- === End Server-Side Action Handling === ---
 
     // Placeholder: Echo action type back as message
     io.to(roomId).emit(

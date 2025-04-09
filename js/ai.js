@@ -178,9 +178,6 @@ async function chooseAndExecuteAIAction(playerIndex) {
       );
       break;
     }
-
-    // Add a small delay before the next iteration of the loop if needed
-    // await delay(50);
   }
   console.log(`AI (${playerName}) finished action sequence.`);
 }

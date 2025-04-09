@@ -3,6 +3,12 @@ import {
   gameState,
   getOpponentPawnsOnBoard,
   getPlayerPawnsInStart,
+  isPawnOnBoard,
+  isPawnInSafety,
+  isPawnAtHome,
+  isPawnAtStart,
+  isPawnMovable,
+  resetTurnState,
 } from "./gameState.js";
 import { PLAYERS } from "./constants.js";
 import { drawGame, isClickOnPawn, isClickOnSquare } from "./drawing.js";
@@ -36,6 +42,12 @@ let resetButton;
 let connectionStatusEl; // Added for online mode
 let playerListContainerEl; // Added for online mode
 let playerListEl; // Added for online mode
+let skipTurnButton; // Added
+// Scenario Panel Elements (passed from main.js)
+let toggleScenarioPanelButton;
+let scenarioContent;
+let scenarioPlayerSelect;
+let scenarioButtons = [];
 
 // UI State
 let currentGameMode = "local"; // Track current game mode ('local' or 'online')
@@ -55,6 +67,13 @@ export function initUI(elements) {
   connectionStatusEl = elements.connectionStatusEl;
   playerListContainerEl = elements.playerListContainerEl;
   playerListEl = elements.playerListEl;
+  // Store ref to skip button
+  skipTurnButton = elements.skipTurnButton;
+  // Store refs to scenario elements
+  toggleScenarioPanelButton = elements.toggleScenarioPanelButton;
+  scenarioContent = elements.scenarioContent;
+  scenarioPlayerSelect = elements.scenarioPlayerSelect;
+  scenarioButtons = elements.scenarioButtons; // Should be an array
 
   // Add event listeners
   drawCardButton.addEventListener("click", handleDrawCardButtonClick);
@@ -62,9 +81,10 @@ export function initUI(elements) {
   canvas.addEventListener("click", handleCanvasClick);
 
   // Add Skip Turn button functionality (for debugging)
-  const skipTurnButton = document.getElementById("skipTurnButton");
   if (skipTurnButton) {
     skipTurnButton.addEventListener("click", skipTurnAction);
+  } else {
+    console.warn("Skip turn button element not passed to initUI.");
   }
 
   // Listen for player assignment from network module
@@ -158,36 +178,41 @@ function handleGameOverUpdate(event) {
 
 // Initialize the scenario manager UI components
 function initScenarioManagerUI() {
-  // Get elements
-  const toggleButton = document.getElementById("toggleScenarioPanel");
-  const scenarioContent = document.getElementById("scenarioContent");
-  const scenarioButtons = document.querySelectorAll(".scenario-btn");
-  const playerSelect = document.getElementById("scenarioPlayer");
+  // Get elements (now using passed refs)
+  // const toggleButton = document.getElementById("toggleScenarioPanel"); // REMOVED
+  // const scenarioContent = document.getElementById("scenarioContent"); // REMOVED
+  // const scenarioButtons = document.querySelectorAll(".scenario-btn"); // REMOVED
+  // const playerSelect = document.getElementById("scenarioPlayer"); // REMOVED
 
-  if (!toggleButton || !scenarioContent) return;
+  // Ensure elements were passed correctly
+  if (!toggleScenarioPanelButton || !scenarioContent || !scenarioPlayerSelect) {
+    console.warn("Scenario panel elements not passed to initUI.");
+    return;
+  }
 
   // Toggle scenario panel visibility
-  toggleButton.addEventListener("click", () => {
+  toggleScenarioPanelButton.addEventListener("click", () => {
     const isHidden = scenarioContent.classList.contains("hidden");
 
     if (isHidden) {
       scenarioContent.classList.remove("hidden");
-      toggleButton.textContent = "Hide Test Scenarios";
+      toggleScenarioPanelButton.textContent = "Hide Test Scenarios";
     } else {
       scenarioContent.classList.add("hidden");
-      toggleButton.textContent = "Show Test Scenarios";
+      toggleScenarioPanelButton.textContent = "Show Test Scenarios";
     }
   });
 
   // Add click handlers for scenario buttons
   scenarioButtons.forEach((button) => {
+    if (!button) return; // Skip if button element is null/undefined
     button.addEventListener("click", () => {
       const scenarioName = button.getAttribute("data-scenario");
-      const playerIndex = parseInt(playerSelect.value);
+      const playerIndex = parseInt(scenarioPlayerSelect.value);
 
       if (currentGameMode === "local") {
         // Only allow in local mode
-        console.log(`Requesting scenario load: ${scenarioName}`);
+        // console.log(`Requesting scenario load: ${scenarioName}`);
         // Dispatch an event for main.js to handle the loading process
         window.dispatchEvent(
           new CustomEvent("loadScenarioRequest", {
@@ -197,11 +222,6 @@ function initScenarioManagerUI() {
             },
           })
         );
-        // Hide panel after selection (optional)
-        // if (!scenarioContent.classList.contains("hidden")) {
-        //     scenarioContent.classList.add("hidden");
-        //     toggleButton.textContent = "Show Test Scenarios";
-        // }
       } else {
         console.warn("Scenarios can only be loaded in Local Game mode.");
       }
@@ -209,7 +229,7 @@ function initScenarioManagerUI() {
   });
 
   // Log available scenarios to console for reference
-  console.log("Scenario Manager initialized.");
+  // console.log("Scenario Manager initialized.");
   listScenarios();
 }
 
@@ -309,7 +329,7 @@ export function updateUI(mode = currentGameMode, localIdx = localPlayerIndex) {
   } else if (!winMessageEl.textContent) {
     // If game is over but message not set by network event yet, provide fallback
     const winnerIndex = gameState.players.findIndex((p) =>
-      p.pawns.every((pawn) => pawn.positionType === "home")
+      p.pawns.every(isPawnAtHome)
     );
     winMessageEl.textContent =
       winnerIndex !== -1 ? `${PLAYERS[winnerIndex].name} wins!` : "Game Over!";
@@ -356,7 +376,7 @@ function handleDrawCardButtonClick() {
   if (currentGameMode === "online") {
     // Check if it's actually our turn (belt and braces)
     if (gameState.currentPlayerIndex === localPlayerIndex) {
-      console.log("Requesting draw card from server...");
+      // console.log("Requesting draw card from server...");
       requestDrawCard();
       // Disable button immediately to prevent double clicks, UI update will confirm
       drawCardButton.disabled = true;
@@ -365,7 +385,7 @@ function handleDrawCardButtonClick() {
     }
   } else {
     // Local mode: Perform draw directly
-    console.log("Draw Card button clicked by human (Local).");
+    // console.log("Draw Card button clicked by human (Local).");
     performDrawCard(gameState.currentPlayerIndex);
   }
 }
@@ -378,7 +398,7 @@ export function performDrawCard(playerIndex) {
     return false;
   }
   if (gameState.currentCard !== null || gameState.gameOver) {
-    console.log("Attempted to draw card when not allowed.");
+    // console.log("Attempted to draw card when not allowed.");
     return false; // Indicate drawing was not performed
   }
 
@@ -404,17 +424,8 @@ export function performDrawCard(playerIndex) {
 // It does NOT execute moves directly. Called after drawing locally.
 // Export needed for main.js to call it when loading scenarios.
 export function determineActionsForCard(playerIndex, card) {
-  // Reset selection state
-  gameState.selectedPawn = null;
-  gameState.selectablePawns = [];
-  gameState.targetableOpponents = [];
-  gameState.validMoves = [];
-  gameState.currentAction = null; // Reset current action
-  gameState.splitData = {
-    firstPawn: null,
-    firstMoveValue: 0,
-    secondPawn: null,
-  }; // Reset split data
+  // Reset selection state using the centralized function
+  resetTurnState();
 
   // Check if playerIndex is valid
   if (
@@ -442,6 +453,9 @@ export function determineActionsForCard(playerIndex, card) {
     if (pawnsInStart.length > 0 && opponentsOnBoard.length > 0) {
       gameState.selectablePawns = pawnsInStart;
       gameState.targetableOpponents = opponentsOnBoard;
+      console.log(
+        `[TargetsSet] Sorry! - Set ${opponentsOnBoard.length} targetable opponents.`
+      );
       gameState.currentAction = "select-sorry-pawn";
       gameState.message = "Sorry! Select your pawn from Start.";
     } else {
@@ -451,19 +465,23 @@ export function determineActionsForCard(playerIndex, card) {
       }
     }
   } else if (card === "11") {
-    const pawnsOnBoardOrSafe = player.pawns.filter(
-      (p) => p.positionType === "board" || p.positionType === "safe"
-    );
+    // Use helpers
+    const pawnsOnBoardOrSafe = player.pawns.filter(isPawnMovable);
     const opponentsOnBoard = getOpponentPawnsOnBoard(playerIndex);
     const canSwap =
-      pawnsOnBoardOrSafe.some((p) => p.positionType === "board") &&
+      pawnsOnBoardOrSafe.some(isPawnOnBoard) && // Check if any movable pawn is specifically on board
       opponentsOnBoard.length > 0;
 
     // Check pawns that can move 11 steps OR can participate in a swap
     player.pawns.forEach((pawn) => {
       const canMove11 = getPossibleMovesForPawn(pawn, "11").length > 0;
-      const isSwappable = pawn.positionType === "board" && canSwap;
+      // Use helper
+      const isSwappable = isPawnOnBoard(pawn) && canSwap;
       if (canMove11 || isSwappable) {
+        // Add logging here
+        console.log(
+          `[SelectableCheck] Card: ${card}, Player: ${playerIndex}, Adding Pawn ${pawn.id} (Pos: ${pawn.positionType} ${pawn.positionIndex})`
+        );
         gameState.selectablePawns.push(pawn);
       }
     });
@@ -472,7 +490,12 @@ export function determineActionsForCard(playerIndex, card) {
       gameState.currentAction = "select-11-pawn";
       gameState.message = "Draw 11: Select pawn to move 11 or swap.";
       // Need to provide targets for potential swap later
-      if (canSwap) gameState.targetableOpponents = opponentsOnBoard;
+      if (canSwap) {
+        gameState.targetableOpponents = opponentsOnBoard;
+        console.log(
+          `[TargetsSet] Card 11 - Set ${opponentsOnBoard.length} targetable opponents.`
+        );
+      }
     } else {
       gameState.message = "Draw 11: No possible moves or swaps.";
       if (!checkForAnyValidAction(playerIndex, card)) {
@@ -490,10 +513,12 @@ export function determineActionsForCard(playerIndex, card) {
           break;
         }
       }
-      if (
-        (pawn.positionType === "board" || pawn.positionType === "safe") &&
-        canMoveSevenSplit
-      ) {
+      // Use helper
+      if (isPawnMovable(pawn) && canMoveSevenSplit) {
+        // Add logging here
+        console.log(
+          `[SelectableCheck] Card: ${card}, Player: ${playerIndex}, Adding Pawn ${pawn.id} (Pos: ${pawn.positionType} ${pawn.positionIndex})`
+        );
         gameState.selectablePawns.push(pawn);
       }
     });
@@ -501,6 +526,11 @@ export function determineActionsForCard(playerIndex, card) {
     if (gameState.selectablePawns.length > 0) {
       gameState.currentAction = "select-7-pawn1";
       gameState.message = "Draw 7: Select first pawn to move or split.";
+      // Set the mandatory flag
+      gameState.splitMandatory = gameState.selectablePawns.length >= 2;
+      console.log(
+        `[ActionSet] Card 7: Set currentAction to '${gameState.currentAction}', splitMandatory=${gameState.splitMandatory}`
+      );
     } else {
       gameState.message = "Draw 7: No pawns available to move.";
       if (!checkForAnyValidAction(playerIndex, card)) {
@@ -510,7 +540,13 @@ export function determineActionsForCard(playerIndex, card) {
   } else {
     // Handle standard numbered cards (1, 2, 3, 4, 5, 8, 10, 12)
     player.pawns.forEach((pawn) => {
-      if (getPossibleMovesForPawn(pawn, card).length > 0) {
+      // Add logging here
+      const moves = getPossibleMovesForPawn(pawn, card);
+      if (moves.length > 0) {
+        console.log(
+          `[SelectableCheck] Card: ${card}, Player: ${playerIndex}, Adding Pawn ${pawn.id} (Pos: ${pawn.positionType} ${pawn.positionIndex}), Moves:`,
+          moves
+        );
         gameState.selectablePawns.push(pawn);
       }
     });
@@ -564,86 +600,155 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
   console.log(`Local Pawn Selection: Player ${playerIndex}, Pawn ${pawn.id}`);
   gameState.selectedPawn = pawn;
   const card = gameState.currentCard;
+  let nextAction = null; // Store the determined next action
 
-  // Reset moves/targets before recalculating
+  // Reset moves (always done after pawn selection)
   gameState.validMoves = [];
-  gameState.targetableOpponents = getOpponentPawnsOnBoard(playerIndex); // Needed for 11/Sorry
+  // Target state will be decided based on nextAction
 
   // Determine next state based on the current action state
   switch (gameState.currentAction) {
     case "select-pawn": // Standard cards (1, 2, 3, 4, 5, 8, 10, 12)
       gameState.validMoves = getPossibleMovesForPawn(pawn, card);
-      gameState.currentAction = "select-move";
+      nextAction = "select-move"; // Does NOT require targets
       gameState.message = `Selected Pawn ${pawn.id}. Choose a move.`;
       break;
     case "select-sorry-pawn": // Pawn from start selected
       // Targets (opponents on board) were already determined
-      gameState.currentAction = "select-sorry-target";
+      nextAction = "select-sorry-target"; // Requires targets
       gameState.message = `Selected Pawn ${pawn.id}. Choose opponent pawn to bump.`;
       break;
     case "select-11-pawn": // Pawn selected for card 11
       // Calculate specific valid moves for THIS pawn.
       gameState.validMoves = getPossibleMovesForPawn(pawn, "11");
       // Check if swap is possible *with this specific pawn* (must be on board)
+      // Keep targetableOpponents check here, as they were set in determineActionsForCard
       const canSwapThisPawn =
-        pawn.positionType === "board" &&
-        gameState.targetableOpponents.length > 0;
+        isPawnOnBoard(pawn) && gameState.targetableOpponents.length > 0;
 
       if (gameState.validMoves.length > 0 && canSwapThisPawn) {
-        gameState.currentAction = "select-11-action"; // Player must choose move OR swap target
+        nextAction = "select-11-action"; // Requires targets (for swap option)
         gameState.message = `Selected Pawn ${pawn.id}. Choose move or opponent to swap.`;
       } else if (gameState.validMoves.length > 0) {
         // Only move is possible
-        gameState.currentAction = "select-move"; // Go directly to move selection
+        nextAction = "select-move"; // Does NOT require targets
         gameState.message = `Selected Pawn ${pawn.id}. Choose move.`;
       } else if (canSwapThisPawn) {
         // Only swap is possible
-        gameState.currentAction = "select-11-swap-target"; // Go directly to target selection
+        nextAction = "select-11-swap-target"; // Requires targets
         gameState.message = `Selected Pawn ${pawn.id}. Choose opponent to swap.`;
       } else {
         // This pawn selected, but has no moves and cannot swap? Error.
         console.error("Pawn selected for card 11 has no move/swap options?");
         gameState.message = "Error: No move or swap for this pawn.";
-        // Reset selection?
-        gameState.selectedPawn = null;
-        gameState.currentAction = "select-11-pawn"; // Go back to pawn selection
-        // Recalculate selectable pawns? Might be complex.
-        determineActionsForCard(playerIndex, card); // Re-run to reset state
+        // Reset selection? Re-run determineActions to reset state properly
+        determineActionsForCard(playerIndex, card); // This will reset action/targets
         return; // Exit to avoid further updates
       }
       break;
     case "select-7-pawn1": // First pawn selected for card 7
       // Player selected the first pawn. Show its potential moves (up to 7).
-      gameState.validMoves = getPossibleMovesForPawn(pawn, "7"); // Show all possible split moves
-      gameState.currentAction = "select-7-move1"; // Expecting move selection for first pawn
-      gameState.message = `Selected Pawn ${pawn.id}. Choose a move (can be split).`;
+      let potentialMoves = getPossibleMovesForPawn(pawn, "7"); // Show all possible split moves
+
+      // *** If split is mandatory, remove the 7-step move option ***
+      if (gameState.splitMandatory) {
+        console.log(
+          "[SplitCheck] Split is mandatory, filtering out 7-step move."
+        );
+        potentialMoves = potentialMoves.filter((move) => move.steps !== 7);
+      }
+
+      gameState.validMoves = potentialMoves;
+      nextAction = "select-7-move1"; // Does NOT require targets
+      gameState.message = `Selected Pawn ${
+        pawn.id
+      }. Choose a move (can be split${
+        gameState.splitMandatory ? ", must be 1-6" : ""
+      }).`;
       break;
     case "select-7-pawn2": // Selecting second pawn for 7-split
       gameState.splitData.secondPawn = pawn;
       // Calculate remaining moves for the second pawn
+      const remainingValueForSecond = 7 - gameState.splitData.firstMoveValue;
       gameState.validMoves = getPossibleMovesForPawn(
         pawn,
-        7 - gameState.splitData.firstMoveValue
+        remainingValueForSecond.toString()
       );
       if (gameState.validMoves.length > 0) {
-        gameState.currentAction = "select-7-move2";
+        nextAction = "select-7-move2"; // Does NOT require targets
         gameState.message = `Selected second Pawn ${pawn.id}. Choose its move.`;
       } else {
         // This shouldn't happen if selection was valid, but handle it
         console.error("Error: No valid moves for second pawn in 7-split?");
         gameState.message = "Error: No moves for second pawn.";
-        // Reset or skip turn? Let's reset selection
+        // Reset selection state for the second pawn choice
         gameState.splitData.secondPawn = null;
-        gameState.currentAction = "select-7-pawn2"; // Go back to selecting 2nd pawn
-        // Need to repopulate selectable pawns for second move
+        gameState.selectedPawn = gameState.splitData.firstPawn; // Re-select first pawn? Maybe not best.
+        // Go back to selecting the second pawn
+        nextAction = "select-7-pawn2";
+        gameState.message = `Error with Pawn ${pawn.id}. Select a different second pawn for remaining ${remainingValueForSecond}.`;
+        // Ensure selectablePawns for this state are repopulated correctly
+        // (This case might need more robust error handling/state reset)
+        gameState.selectablePawns = [];
+        gameState.players[playerIndex].pawns.forEach((otherPawn) => {
+          if (
+            otherPawn !== gameState.splitData.firstPawn &&
+            isPawnMovable(otherPawn)
+          ) {
+            const secondMoves = getPossibleMovesForPawn(
+              otherPawn,
+              remainingValueForSecond.toString()
+            );
+            if (secondMoves.length > 0) {
+              gameState.selectablePawns.push(otherPawn);
+            }
+          }
+        });
+        // If still no selectable pawns, turn should probably end.
       }
       break;
     default:
       console.error(
         `Unexpected state in executeLocalPawnSelection: ${gameState.currentAction}`
       );
+      nextAction = gameState.currentAction; // Keep current action on error
       break;
   }
+
+  // Now, clear targets based on the *next* action state
+  const nextActionRequiresTargets = [
+    "select-sorry-target",
+    "select-11-swap-target",
+    "select-11-action", // Requires targets because swap is an option
+  ].includes(nextAction);
+
+  if (!nextActionRequiresTargets) {
+    // Only clear if the state we are *entering* doesn't need them.
+    if (gameState.targetableOpponents.length > 0) {
+      console.log(
+        `[StateReset] Clearing targetableOpponents as next action '${nextAction}' does not require them.`
+      );
+      gameState.targetableOpponents = [];
+    }
+  } else {
+    // Keep targets if next action needs them
+    if (gameState.targetableOpponents.length > 0) {
+      console.log(
+        `[StateReset] Preserving targetableOpponents (${gameState.targetableOpponents.length}) as next action '${nextAction}' requires them.`
+      );
+    } else {
+      // This case might occur if e.g. Card 11 was drawn, pawn selected,
+      // but no actual opponents were on board to target.
+      console.log(
+        `[StateReset] Next action '${nextAction}' requires targets, but none are currently set.`
+      );
+      // Should we re-fetch here just in case? Might be redundant if determineActions did it.
+      // Let's assume determineActions set it correctly if needed.
+    }
+  }
+
+  // Update the current action
+  gameState.currentAction = nextAction;
 
   updateUI();
   drawGame(); // Redraw to highlight selected pawn and maybe moves/targets
@@ -655,7 +760,7 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
 export function performMoveSelection(playerIndex, move) {
   if (currentGameMode === "online") {
     if (playerIndex === localPlayerIndex) {
-      console.log("Requesting move selection:", move);
+      // console.log("Requesting move selection:", move);
       requestMoveSelection(move);
       // Disable interaction until server responds
       canvas.classList.remove("clickable");
@@ -690,9 +795,21 @@ export function performMoveSelection(playerIndex, move) {
       break;
     case "select-7-move1": // Player chose move for first pawn of split-7
       const moveValue = move.steps; // Use the 'steps' property added earlier
-      console.log(
-        `Split-7: Part 1 executed (${moveValue} steps). Calculating remaining.`
-      );
+
+      // *** Check for mandatory split violation ***
+      if (moveValue === 7 && gameState.splitMandatory) {
+        gameState.message =
+          "Invalid move: Must split 7 if possible (select move 1-6).";
+        console.warn("Attempted 7-step move when split was possible.");
+        updateUI();
+        drawGame();
+        return; // Reject the move selection
+      }
+
+      // Proceed with executing the first part of the move
+      // console.log(
+      //   `Split-7: Part 1 executed (${moveValue} steps). Calculating remaining.`
+      // );
       // *** Pass false for endTurnAfter for the first part of split ***
       executeMove(gameState.selectedPawn, move, false);
 
@@ -700,7 +817,7 @@ export function performMoveSelection(playerIndex, move) {
       // or if game ended
       if (gameState.currentPlayerIndex === playerIndex && !gameState.gameOver) {
         const remainingValue = 7 - moveValue;
-        console.log(`Split-7: Remaining value = ${remainingValue}`);
+        // console.log(`Split-7: Remaining value = ${remainingValue}`);
         if (remainingValue > 0) {
           // Need to select second pawn
           gameState.splitData.firstPawn = gameState.selectedPawn;
@@ -708,39 +825,37 @@ export function performMoveSelection(playerIndex, move) {
           gameState.selectedPawn = null; // Clear selection for next pawn
           gameState.validMoves = []; // Clear moves
           gameState.selectablePawns = []; // Clear old selectable pawns
-          console.log("Split-7: Finding other pawns for second move...");
+          // console.log("Split-7: Finding other pawns for second move...");
 
           // Find OTHER selectable pawns for the second move
           gameState.players[playerIndex].pawns.forEach((pawn) => {
-            console.log(
-              `  - Checking Pawn ID ${pawn.id} (Type: ${pawn.positionType})`
-            );
-            if (
-              pawn !== gameState.splitData.firstPawn &&
-              (pawn.positionType === "board" || pawn.positionType === "safe")
-            ) {
+            // console.log(
+            //   `  - Checking Pawn ID ${pawn.id} (Type: ${pawn.positionType})`
+            // );
+            // Use helper
+            if (pawn !== gameState.splitData.firstPawn && isPawnMovable(pawn)) {
               const secondMoves = getPossibleMovesForPawn(
                 pawn,
                 remainingValue.toString()
               );
-              console.log(
-                `    - Can Pawn ${pawn.id} move ${remainingValue} steps? ${
-                  secondMoves.length > 0 ? "Yes" : "No"
-                }`
-              );
+              // console.log(
+              //   `    - Can Pawn ${pawn.id} move ${remainingValue} steps? ${
+              //     secondMoves.length > 0 ? "Yes" : "No"
+              //   }`
+              // );
               if (secondMoves.length > 0) {
                 gameState.selectablePawns.push(pawn);
               }
             }
           });
 
-          console.log(
-            `Split-7: Found ${gameState.selectablePawns.length} other pawn(s) for second move.`
-          );
+          // console.log(
+          //   `Split-7: Found ${gameState.selectablePawns.length} other pawn(s) for second move.`
+          // );
 
           if (gameState.selectablePawns.length > 0) {
             // If OTHER pawns CAN move, force selection of one of them
-            console.log("Split-7: Transitioning to select-7-pawn2 state.");
+            // console.log("Split-7: Transitioning to select-7-pawn2 state.");
             gameState.currentAction = "select-7-pawn2";
             gameState.message = `First move done (${moveValue}). Select second pawn for remaining ${remainingValue}.`;
             // Update UI to show options for second pawn
@@ -750,19 +865,24 @@ export function performMoveSelection(playerIndex, move) {
             // If NO OTHER pawn can make the remaining move, the turn ends.
             // The first pawn does NOT get to use the remaining steps.
             console.log(
-              "Split-7: No other pawn can make the second move. Ending turn."
+              "[Split-7 Debug] Entered 'else' block - no second pawn can move."
             );
             gameState.message = `First move done (${moveValue}). No valid second move. Turn ends.`;
-            console.log(
-              "No valid second pawn/move for 7-split. Force ending turn."
-            );
-            window.dispatchEvent(new Event("nextTurn")); // Force turn end
+            console.log("[Split-7 Debug] State before dispatching nextTurn:", {
+              currentAction: gameState.currentAction,
+              selectedPawn: gameState.selectedPawn,
+              splitData: { ...gameState.splitData },
+              currentPlayerIndex: gameState.currentPlayerIndex,
+              nextTurnPending: true,
+            });
+            window.dispatchEvent(new Event("nextTurn"));
+            console.log("[Split-7 Debug] Dispatched 'nextTurn' event.");
           }
         } else {
           // Move used exactly 7 steps
-          console.log(
-            "Split-7: Used exactly 7 steps in one move. Ending turn."
-          );
+          // console.log(
+          //   "Split-7: Used exactly 7 steps in one move. Ending turn."
+          // );
           window.dispatchEvent(new Event("nextTurn")); // Force turn end if exactly 7 steps used
         }
       }
@@ -789,6 +909,10 @@ function handleCanvasClick(event) {
   const clickY = event.clientY - rect.top;
 
   const playerIndex = gameState.currentPlayerIndex;
+  // Add log here to check action state on click
+  console.log(
+    `[CanvasClick] Handling click. Current Action: ${gameState.currentAction}`
+  );
 
   // --- Online Mode Turn Check ---
   if (currentGameMode === "online" && playerIndex !== localPlayerIndex) {
@@ -799,13 +923,13 @@ function handleCanvasClick(event) {
 
   // Ignore clicks if game is over or no action expected
   if (gameState.gameOver || !gameState.currentAction) {
-    console.log("Canvas clicked, but no action expected.");
+    // console.log("Canvas clicked, but no action expected.");
     return;
   }
 
-  console.log(
-    `Canvas Clicked. Action: ${gameState.currentAction}, SelectedPawn: ${gameState.selectedPawn?.id}`
-  );
+  // console.log(
+  //   `Canvas Clicked. Action: ${gameState.currentAction}, SelectedPawn: ${gameState.selectedPawn?.id}`
+  // );
 
   let clickedPawn = null;
   let clickedMove = null;
@@ -821,7 +945,7 @@ function handleCanvasClick(event) {
     case "select-7-pawn2":
       clickedPawn = isClickOnPawn(clickX, clickY, gameState.selectablePawns);
       if (clickedPawn) {
-        console.log(`Clicked on Selectable Pawn: ${clickedPawn.id}`);
+        // console.log(`Clicked on Selectable Pawn: ${clickedPawn.id}`);
         // Call the correct function based on mode
         if (currentGameMode === "online") {
           requestSelectPawn(clickedPawn); // Send request online
@@ -846,7 +970,7 @@ function handleCanvasClick(event) {
         gameState.targetableOpponents
       );
       if (clickedTarget) {
-        console.log(`Clicked on Targetable Opponent: ${clickedTarget.id}`);
+        // console.log(`Clicked on Targetable Opponent: ${clickedTarget.id}`);
         if (gameState.currentAction === "select-sorry-target") {
           if (currentGameMode === "online") {
             requestSorry(clickedTarget);
@@ -871,7 +995,7 @@ function handleCanvasClick(event) {
     case "select-7-move2":
       clickedMove = isClickOnSquare(clickX, clickY, gameState.validMoves);
       if (clickedMove) {
-        console.log("Clicked on Valid Move:", clickedMove);
+        // console.log("Clicked on Valid Move:", clickedMove);
         performMoveSelection(playerIndex, clickedMove);
         return;
       }
@@ -880,7 +1004,7 @@ function handleCanvasClick(event) {
     case "select-11-action": // Can click move OR target
       clickedMove = isClickOnSquare(clickX, clickY, gameState.validMoves);
       if (clickedMove) {
-        console.log("Clicked on Valid Move (for 11):".clickedMove);
+        // console.log("Clicked on Valid Move (for 11):".clickedMove);
         performMoveSelection(playerIndex, clickedMove);
         return;
       }
@@ -890,9 +1014,9 @@ function handleCanvasClick(event) {
         gameState.targetableOpponents
       );
       if (clickedTarget) {
-        console.log(
-          `Clicked on Targetable Opponent (for 11 swap): ${clickedTarget.id}`
-        );
+        // console.log(
+        //   `Clicked on Targetable Opponent (for 11 swap): ${clickedTarget.id}`
+        // );
         if (currentGameMode === "online") {
           requestSwap(clickedTarget);
         } else {
@@ -903,13 +1027,13 @@ function handleCanvasClick(event) {
       break;
 
     default:
-      console.log(
-        `Click occurred during unhandled action state: ${gameState.currentAction}`
-      );
+      // console.log(
+      //   `Click occurred during unhandled action state: ${gameState.currentAction}`
+      // );
       break;
   }
 
-  console.log("Click did not match any actionable item for the current state.");
+  // console.log("Click did not match any actionable item for the current state.");
 }
 
 // Reset game state and UI
@@ -935,7 +1059,7 @@ function skipTurnAction() {
       gameState.currentPlayerIndex === localPlayerIndex &&
       !gameState.gameOver
     ) {
-      console.log("Requesting skip turn from server...");
+      // console.log("Requesting skip turn from server...");
       emitAction("skipTurn");
     } else {
       console.log("Cannot skip turn: Not your turn or game over (Online).");

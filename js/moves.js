@@ -20,6 +20,12 @@ import {
   getOpponentPawnsOnBoard,
   getPlayerPawnsInStart,
   isOccupiedByOpponent,
+  isPawnOnBoard,
+  isPawnInSafety,
+  isPawnAtHome,
+  isPawnAtStart,
+  isPawnMovable,
+  resetTurnState,
 } from "./gameState.js";
 import { drawGame } from "./drawing.js";
 import { updateUI } from "./ui.js";
@@ -185,7 +191,7 @@ export function diagnoseSafetyZones() {
 // Direct, simplified function to handle movement within safety zones without complex logic
 function getMovesWithinSafetyZone(pawn, steps) {
   // Simple validation
-  if (pawn.positionType !== "safe") return [];
+  if (!isPawnInSafety(pawn)) return [];
   if (steps <= 0) return [];
 
   const moves = [];
@@ -249,7 +255,7 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
   const numericCardValue = parseInt(cardValue);
 
   // If pawn is in safety zone, use our dedicated safety zone movement engine
-  if (pawn.positionType === "safe") {
+  if (isPawnInSafety(pawn)) {
     // Delegate ALL safety zone movement to our dedicated engine
     console.log(
       `Using safety zone movement engine for pawn ${pawn.id} with card ${cardValue}`
@@ -322,38 +328,33 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
 
   // New handle for the 'entry' position type (pawn at safety zone entrance)
   if (pawn.positionType === "entry") {
-    // Pawn is at safety zone entrance - must enter safety zone if card allows forward movement
+    // Pawn is at safety zone entrance
+
+    // Handle standard forward movement cards
     if (
       cardValue !== "4" &&
       cardValue !== "Sorry!" &&
       cardValue !== "11" &&
+      cardValue !== "7" && // Exclude 7 from this block now
       !isNaN(numericCardValue) &&
       numericCardValue > 0
     ) {
       // The first step is used to enter the safety zone, leaving numericCardValue-1 steps
       // for movement within the safety zone
       const stepCount = numericCardValue - 1;
-
-      // Safety zone has 5 spaces, and Home is at position 6 from the entrance
-      // Entry counts as 1 move, so we need exactly 5 more to reach home
-
-      // If we'd go beyond the safety zone's end (which is 4), it's invalid
-      if (stepCount > 4) {
-        // A move that would overshoot Home is invalid - need exact count to reach home
-        console.log(
-          `Invalid move: Card ${numericCardValue} would overshoot Home from entrance`
-        );
+      if (stepCount >= SAFETY_ZONE_LENGTH) {
+        // Check overshoot (index 0-4 ok)
+        // console.log(
+        //   `Invalid move: Card ${numericCardValue} would overshoot Home from entrance`
+        // );
         return [];
       }
-
-      // Check if the target safety zone position is already occupied by own pawn
       if (isOccupiedByOwnPawnSafe(playerIndex, stepCount)) {
-        console.log(
-          `Invalid move: Safety zone position ${stepCount} already occupied by own pawn`
-        );
+        // console.log(
+        //   `Invalid move: Safety zone position ${stepCount} already occupied by own pawn`
+        // );
         return [];
       }
-
       // Valid move into the safety zone
       return [
         {
@@ -365,13 +366,37 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
         },
       ];
     }
+    // Handle Card 7 splits specifically for entry position
+    else if (cardValue === "7") {
+      const entrySplitMoves = [];
+      for (let steps = 1; steps <= 7; steps++) {
+        const targetSafeIndex = steps - 1;
 
-    // No valid moves for this pawn if card doesn't allow forward movement into safety zone
-    return [];
+        // Check if move is valid (within bounds 0-4 and not occupied)
+        if (
+          targetSafeIndex < SAFETY_ZONE_LENGTH &&
+          !isOccupiedByOwnPawnSafe(playerIndex, targetSafeIndex)
+        ) {
+          entrySplitMoves.push({
+            type: "move",
+            positionType: "safe",
+            positionIndex: targetSafeIndex,
+            pixelX: SAFETY_ZONES[playerIndex][targetSafeIndex].pixelX,
+            pixelY: SAFETY_ZONES[playerIndex][targetSafeIndex].pixelY,
+            steps: steps, // Add steps property for split tracking
+          });
+        }
+      }
+      return entrySplitMoves;
+    }
+    // Handle other cards (like 4, Sorry!, 11) - no moves from entry
+    else {
+      return [];
+    }
   }
 
   if (cardValue === "4") {
-    if (pawn.positionType === "board") {
+    if (isPawnOnBoard(pawn)) {
       // Fix: Ensure proper backward movement with wrap-around
       // Adding PATH_LENGTH ensures we avoid negative indices
       const targetIndex = (pawn.positionIndex - 4 + PATH_LENGTH) % PATH_LENGTH;
@@ -387,7 +412,7 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
     }
   } else if (cardValue === "10") {
     // Handle Card 10: Forward 10 OR Backward 1
-    if (pawn.positionType === "board") {
+    if (isPawnOnBoard(pawn)) {
       // Calculate Forward 10
       console.log(
         `Checking FWD 10 for Pawn ${pawn.id} at ${pawn.positionIndex}`
@@ -425,7 +450,7 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
     // Note: Card 10 logic for safety zone pawns is handled earlier in the function.
   } else if (cardValue === "7") {
     // Special handling for card 7 - calculate all possible moves between 1-7 spaces
-    if (pawn.positionType === "board") {
+    if (isPawnOnBoard(pawn)) {
       // Calculate all possible move distances from 1 to 7
       for (let steps = 1; steps <= 7; steps++) {
         const fwdMove = calculateForwardSteps(pawn, steps, startInfo);
@@ -440,10 +465,7 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
       }
     }
   } else if (!isNaN(numericCardValue) && numericCardValue > 0) {
-    if (
-      pawn.positionType === "start" &&
-      (cardValue === "1" || cardValue === "2")
-    ) {
+    if (isPawnAtStart(pawn) && (cardValue === "1" || cardValue === "2")) {
       const exitIndex = startInfo.exitIndex;
       if (!isOccupiedByOwnPawnBoard(exitIndex, pawn.playerIndex)) {
         moves.push({
@@ -454,7 +476,7 @@ export function getPossibleMovesForPawn(pawn, card, stepsOverride = null) {
           pixelY: BOARD_PATH[exitIndex].pixelY,
         });
       }
-    } else if (pawn.positionType === "board") {
+    } else if (isPawnOnBoard(pawn)) {
       // Regular board movement
       const fwdMove = calculateForwardSteps(pawn, numericCardValue, startInfo);
       if (fwdMove.type !== "invalid") moves.push({ type: "move", ...fwdMove });
@@ -592,9 +614,7 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
 
               if (
                 otherPawn !== pawn &&
-                (otherPawn.positionType === "entry" ||
-                  (otherPawn.positionType === "board" &&
-                    otherPawn.positionIndex === currentPos)) &&
+                isPawnOnBoard(otherPawn) &&
                 otherPawn.positionIndex === currentPos
               ) {
                 console.log(
@@ -719,9 +739,7 @@ export function calculateForwardSteps(pawn, steps, startInfo) {
 
             if (
               otherPawn !== pawn &&
-              (otherPawn.positionType === "entry" ||
-                (otherPawn.positionType === "board" &&
-                  otherPawn.positionIndex === currentPos)) &&
+              isPawnOnBoard(otherPawn) &&
               otherPawn.positionIndex === currentPos
             ) {
               console.log(
@@ -805,7 +823,7 @@ export function checkForAnyValidAction(playerIndex, card) {
 
   // Check for 11 card (swaps)
   if (card === "11") {
-    const pawnsOnBoard = player.pawns.filter((p) => p.positionType === "board");
+    const pawnsOnBoard = player.pawns.filter(isPawnOnBoard);
     const opponentsOnBoard = getOpponentPawnsOnBoard(playerIndex);
     return pawnsOnBoard.length > 0 && opponentsOnBoard.length > 0;
   }
@@ -815,7 +833,7 @@ export function checkForAnyValidAction(playerIndex, card) {
     let movablePawns = 0;
     for (const pawn of player.pawns) {
       if (
-        (pawn.positionType === "board" || pawn.positionType === "safe") &&
+        isPawnMovable(pawn) &&
         getPossibleMovesForPawn(pawn, "1").length > 0
       ) {
         movablePawns++;
@@ -829,22 +847,12 @@ export function checkForAnyValidAction(playerIndex, card) {
 
 // Execute a move for a pawn
 export function executeMove(pawn, destination, endTurnAfter = true) {
-  console.log(
-    `Executing Move: Pawn ${pawn.id} to Type: ${destination.positionType}, Index: ${destination.positionIndex}`
-  );
-
   const playerIndex = pawn.playerIndex;
   let message = "";
 
-  // Safety check: Ensure we're not landing on our own pawn
-  if (
-    destination.positionType === "board" ||
-    destination.positionType === "entry"
-  ) {
+  // Safety check: Use helpers for destination type check
+  if (isPawnOnBoard({ positionType: destination.positionType })) {
     if (isOccupiedByOwnPawnBoard(destination.positionIndex, playerIndex)) {
-      console.error(
-        `ERROR: Cannot move to position already occupied by own pawn!`
-      );
       gameState.message = "Invalid move: space already occupied by your pawn.";
 
       // Reset selection state
@@ -857,11 +865,8 @@ export function executeMove(pawn, destination, endTurnAfter = true) {
       updateUI();
       return; // Abort move
     }
-  } else if (destination.positionType === "safe") {
+  } else if (isPawnInSafety({ positionType: destination.positionType })) {
     if (isOccupiedByOwnPawnSafe(playerIndex, destination.positionIndex)) {
-      console.error(
-        `ERROR: Cannot move to safety position already occupied by own pawn!`
-      );
       gameState.message =
         "Invalid move: safety space already occupied by your pawn.";
 
@@ -877,16 +882,12 @@ export function executeMove(pawn, destination, endTurnAfter = true) {
     }
   }
 
-  // Check for bumping opponent pawns when landing on a board square or safety entry point
-  if (
-    destination.positionType === "board" ||
-    destination.positionType === "entry"
-  ) {
+  // Check for bumping opponent pawns: Use helper for destination type check
+  if (isPawnOnBoard({ positionType: destination.positionType })) {
     const bumpedPawn = getPawnAtBoardIndex(destination.positionIndex);
     if (bumpedPawn && bumpedPawn.playerIndex !== playerIndex) {
       sendPawnToStart(bumpedPawn);
       message = `Bumped ${PLAYERS[bumpedPawn.playerIndex].name}'s pawn! `;
-      console.log(message);
     }
   }
 
@@ -896,13 +897,12 @@ export function executeMove(pawn, destination, endTurnAfter = true) {
 
   let didSlide = false;
 
-  // Check for slides
-  if (pawn.positionType === "board") {
+  // Check for slides: Use helper for pawn type check
+  if (isPawnOnBoard(pawn)) {
     const slide = SLIDE_INFO[pawn.positionIndex];
     if (slide && slide.colorIndex !== playerIndex) {
       didSlide = true;
       message += `Landed on ${PLAYERS[slide.colorIndex].name}'s slide! `;
-      console.log(message);
 
       const slideStartIndex = pawn.positionIndex;
       const slideEndIndex = slide.endBoardIndex;
@@ -916,21 +916,18 @@ export function executeMove(pawn, destination, endTurnAfter = true) {
           message += ` slid into & bumped ${
             PLAYERS[pawnOnSlide.playerIndex].name
           }! `;
-          console.log(`Slide bumped pawn at index ${currentIndex}`);
         }
 
         if (currentIndex === slideEndIndex) break;
 
         currentIndex = (currentIndex + 1) % PATH_LENGTH;
         if (currentIndex === (slideStartIndex + 1) % PATH_LENGTH) {
-          console.error("Infinite loop detected in slide bumping!");
           break;
         }
       }
 
       // Update pawn to slide end position
       pawn.positionIndex = slideEndIndex;
-      console.log(`Pawn slid to index ${slideEndIndex}`);
 
       // Check for bumping at the end of the slide
       const finalBumpedPawn = getPawnAtBoardIndex(slideEndIndex);
@@ -941,41 +938,48 @@ export function executeMove(pawn, destination, endTurnAfter = true) {
       ) {
         sendPawnToStart(finalBumpedPawn);
         message += ` Bumped another pawn after slide!`;
-        console.log("Unexpected bump after slide!");
       }
     }
   }
 
   gameState.message = message.trim() || "Move complete.";
 
-  // Check for win condition
-  let won = false;
-  if (pawn.positionType === "home") {
-    won = checkWinCondition(playerIndex);
+  // Check for win condition *after* moving
+  let gameWon = false;
+  if (destination.positionType === "home") {
+    console.log(`Pawn ${pawn.id} reached home!`);
+    gameWon = checkWinCondition(playerIndex);
   }
 
-  // Reset selection state
-  gameState.selectedPawn = null;
-  gameState.validMoves = [];
-  gameState.selectablePawns = [];
-  gameState.targetableOpponents = [];
-
-  if (endTurnAfter && !won) {
-    // nextTurn(); // Old call to local function
-    window.dispatchEvent(new Event("nextTurn")); // Dispatch global event
+  // Only end turn if specified AND game not won
+  if (endTurnAfter && !gameWon) {
+    // Reset state *before* ending the turn
+    resetTurnState();
+    console.log("executeMove: Dispatching nextTurn event.");
+    window.dispatchEvent(new Event("nextTurn"));
+  } else if (gameWon) {
+    console.log(`Player ${playerIndex} wins! Setting game over.`);
+    gameState.gameOver = true;
+    gameState.message = `${PLAYERS[playerIndex].name} wins!`;
+    // Also reset state on win, even if turn doesn't advance in the usual way
+    resetTurnState();
+    // Do not advance turn, just update UI
   } else {
-    // If turn doesn't end (e.g., mid-7 split), just update visuals
-    drawGame();
-    updateUI();
+    // endTurnAfter is false, OR game was won but we handled it above
+    console.log(
+      `executeMove: endTurnAfter is false, not ending turn or resetting state here. Control returns to caller.`
+    );
+    // No turn advancement here, control returns to caller (e.g., performMoveSelection)
+    // Crucially, do NOT resetTurnState() here, let the caller manage state.
   }
+
+  // Update UI and redraw AFTER state changes and potential turn advancement
+  drawGame();
+  updateUI();
 }
 
 // Execute a Sorry! card action
 export function executeSorry(startPawn, targetPawn) {
-  console.log(
-    `Executing Sorry! Pawn ${startPawn.id} bumping Player ${targetPawn.playerIndex} Pawn ${targetPawn.id}`
-  );
-
   const targetPositionIndex = targetPawn.positionIndex;
 
   // Send opponent's pawn back to start
@@ -994,17 +998,13 @@ export function executeSorry(startPawn, targetPawn) {
   gameState.validMoves = [];
   gameState.selectablePawns = [];
   gameState.targetableOpponents = [];
+  console.log("[StateReset] Cleared targetableOpponents in executeSorry");
 
-  // nextTurn(); // Old call
   window.dispatchEvent(new Event("nextTurn")); // Dispatch global event
 }
 
 // Execute a swap (11 card)
 export function executeSwap(playerPawn, opponentPawn) {
-  console.log(
-    `Executing Swap: Player ${playerPawn.playerIndex} Pawn ${playerPawn.id} with Player ${opponentPawn.playerIndex} Pawn ${opponentPawn.id}`
-  );
-
   const playerPosIndex = playerPawn.positionIndex;
   const opponentPosIndex = opponentPawn.positionIndex;
 
@@ -1019,7 +1019,6 @@ export function executeSwap(playerPawn, opponentPawn) {
   // Check if player landed on a slide
   const slide = SLIDE_INFO[playerPawn.positionIndex];
   if (slide && slide.colorIndex !== playerPawn.playerIndex) {
-    console.log("Player pawn landed on slide after swap!");
     gameState.message += ` Landed on a slide!`;
   } else {
     // Check if player bumped another pawn
@@ -1031,7 +1030,6 @@ export function executeSwap(playerPawn, opponentPawn) {
     ) {
       sendPawnToStart(bumpedPawn);
       gameState.message += ` Bumped another pawn after swap!`;
-      console.log("Unexpected bump after swap!");
     }
   }
 
@@ -1040,24 +1038,20 @@ export function executeSwap(playerPawn, opponentPawn) {
   gameState.validMoves = [];
   gameState.selectablePawns = [];
   gameState.targetableOpponents = [];
+  console.log("[StateReset] Cleared targetableOpponents in executeSwap");
 
-  // nextTurn(); // Old call
   window.dispatchEvent(new Event("nextTurn")); // Dispatch global event
 }
 
 // Check win condition for a player
 export function checkWinCondition(playerIndex) {
   const player = gameState.players[playerIndex];
-  const allHome = player.pawns.every((p) => p.positionType === "home");
+  const allHome = player.pawns.every(isPawnAtHome);
 
   if (allHome) {
     console.log(`Player ${playerIndex} (${PLAYERS[playerIndex].name}) Wins!`);
     gameState.gameOver = true;
-    gameState.message = "";
-    document.getElementById(
-      "winMessage"
-    ).textContent = `${PLAYERS[playerIndex].name} Wins! Congratulations!`;
-    updateUI();
+    gameState.message = ""; // Clear any previous message
   }
 
   return allHome;
@@ -1081,7 +1075,7 @@ export function safetyzoneMovementEngine(pawn, steps, forceAllowMove = false) {
     return [];
   }
 
-  if (pawn.positionType !== "safe") {
+  if (!isPawnInSafety(pawn)) {
     console.error(
       `ERROR: Pawn position type is ${pawn.positionType}, not 'safe'`
     );

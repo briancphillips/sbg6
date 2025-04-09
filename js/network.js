@@ -1,7 +1,5 @@
 // Network module for handling WebSocket communication via Socket.IO
 import { gameState, initializeGameState } from "./gameState.js"; // May need to update local state based on server
-// import { updateUI } from "./ui.js"; // UI updates should be triggered by events handled in main.js/ui.js
-// import { drawGame } from "./drawing.js"; // Drawing updates should be triggered by events handled in main.js/ui.js
 
 let socket = null;
 let isConnected = false;
@@ -31,16 +29,6 @@ export function connect(playerName) {
   });
 
   setupListeners(); // Setup listeners after initializing socket
-
-  // // Simulate connection for now
-  // setTimeout(() => {
-  //     console.log("Simulated connection successful.");
-  //     isConnected = true;
-  //     // Simulate receiving player ID
-  //     localPlayerId = "player_" + Math.random().toString(36).substring(7);
-  //     // Update UI (e.g., show connected status)
-  //     document.dispatchEvent(new CustomEvent('networkStatus', { detail: { status: 'connected', playerId: localPlayerId } }));
-  // }, 1000);
 }
 
 /**

@@ -581,6 +581,15 @@ export function drawPawns() {
 
           // Highlight targetable opponents
           if (gameState.targetableOpponents.includes(pawn)) {
+            // Added log to confirm target highlighting
+            console.log(
+              `[DrawingCheck] Highlighting Pawn ${pawn.id} (Player ${pawn.playerIndex}) as targetable. Targets array:`,
+              JSON.stringify(
+                gameState.targetableOpponents.map(
+                  (p) => `P${p.playerIndex}-${p.id}`
+                )
+              )
+            );
             drawCircle(
               coords.x,
               coords.y,

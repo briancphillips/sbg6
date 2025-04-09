@@ -54,6 +54,7 @@ export const gameState = {
     firstMoveValue: 0,
     secondPawn: null,
   },
+  splitMandatory: false,
 };
 
 // Game state utility functions
@@ -77,25 +78,12 @@ export function getOwnPawnAtSafeZoneIndex(playerIndex, safeIndex) {
   if (safeIndex < 0 || safeIndex >= SAFETY_ZONES[playerIndex].length)
     return null;
 
-  // Add detailed debug logging to see which pawns are being found
-  console.log(
-    `DETAILED DEBUG: Checking pawns at safety zone ${safeIndex} for player ${playerIndex}`
-  );
-
   for (const pawn of gameState.players[playerIndex].pawns) {
-    console.log(
-      `DETAILED DEBUG: Pawn ${pawn.id} is at ${pawn.positionType} position ${pawn.positionIndex}`
-    );
-
     if (pawn.positionType === "safe" && pawn.positionIndex === safeIndex) {
-      console.log(
-        `DETAILED DEBUG: Found pawn ${pawn.id} at safety position ${safeIndex}`
-      );
       return pawn;
     }
   }
 
-  console.log(`DETAILED DEBUG: No pawn found at safety position ${safeIndex}`);
   return null;
 }
 
@@ -173,10 +161,56 @@ export function getOpponentPawnsOnBoard(currentPlayerIndex) {
   return opponents;
 }
 
-export function getPlayerPawnsInStart(playerIndex) {
-  return gameState.players[playerIndex].pawns.filter(
-    (pawn) => pawn.positionType === "start"
+// Function to check if a pawn is on the main board track ('board' or 'entry')
+export function isPawnOnBoard(pawn) {
+  return (
+    pawn && (pawn.positionType === "board" || pawn.positionType === "entry")
   );
+}
+
+// Function to check if a pawn is in its safety zone
+export function isPawnInSafety(pawn) {
+  return pawn && pawn.positionType === "safe";
+}
+
+// Function to check if a pawn is at Home
+export function isPawnAtHome(pawn) {
+  return pawn && pawn.positionType === "home";
+}
+
+// Function to check if a pawn is at Start
+export function isPawnAtStart(pawn) {
+  return pawn && pawn.positionType === "start";
+}
+
+// Function to check if a pawn is eligible for standard movement (on board or in safety)
+export function isPawnMovable(pawn) {
+  return pawn && (isPawnOnBoard(pawn) || isPawnInSafety(pawn));
+}
+
+export function getPlayerPawnsInStart(playerIndex) {
+  // Now uses the helper function
+  return gameState.players[playerIndex].pawns.filter(isPawnAtStart);
+}
+
+/**
+ * Resets the turn-specific parts of the game state.
+ * Should be called at the start of a new turn (local mode) or when receiving state from server.
+ */
+export function resetTurnState() {
+  console.log("[StateReset] Clearing targetableOpponents in resetTurnState");
+  gameState.selectedPawn = null;
+  gameState.selectablePawns = [];
+  gameState.validMoves = [];
+  gameState.targetableOpponents = [];
+  gameState.currentAction = null;
+  gameState.splitData = {
+    firstPawn: null,
+    firstMoveValue: 0,
+    secondPawn: null,
+  };
+  gameState.splitMandatory = false;
+  // Don't reset message here, turn logic sets it.
 }
 
 export function initializeGameState(playerTypes = {}) {
@@ -215,5 +249,6 @@ export function initializeGameState(playerTypes = {}) {
     firstMoveValue: 0,
     secondPawn: null,
   };
+  gameState.splitMandatory = false;
   gameState.message = `${PLAYERS[0].name}'s turn. Draw a card.`;
 }
