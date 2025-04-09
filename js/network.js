@@ -1,13 +1,15 @@
 // Network module for handling WebSocket communication via Socket.IO
-import { gameState, initializeGameState } from "./gameState.js"; // May need to update local state based on server
+import { gameState, resetTurnState } from "./gameState.js";
+import { updateUI } from "./ui.js";
 
 let socket = null;
 let isConnected = false;
 let localPlayerName = "";
-let localPlayerId = null; // Assigned by server
-let localPlayerIndex = -1; // Assigned by server upon joining room
+let localPlayerId = null;
+let localPlayerIndex = -1;
+let assignedPlayerIndex = null;
 
-const SERVER_URL = "http://localhost:3000"; // TODO: Make configurable
+const SERVER_URL = "http://localhost:3000";
 
 /**
  * Connects to the Socket.IO server.
@@ -24,19 +26,22 @@ export function connect(playerName) {
 
   // Use actual Socket.IO connection
   socket = io(SERVER_URL, {
-    query: { playerName }, // Send player name on connection
+    query: { playerName },
     reconnectionAttempts: 3,
   });
 
-  setupListeners(); // Setup listeners after initializing socket
+  setupListeners();
 }
 
 /**
  * Disconnects from the Socket.IO server.
  */
 export function disconnect() {
+  // Clear relevant game state on disconnect
+  gameState.roomId = null;
+  gameState.gameStarted = false;
   if (socket) {
-    console.log("Disconnecting from server...");
+    console.log("Disconnecting socket...");
     socket.disconnect();
     socket = null;
   }
@@ -58,7 +63,7 @@ function setupListeners() {
 
   socket.on("connect", () => {
     isConnected = true;
-    localPlayerId = socket.id; // Use socket ID as player ID
+    localPlayerId = socket.id;
     console.log(`Connected to server with ID: ${localPlayerId}`);
     document.dispatchEvent(
       new CustomEvent("networkStatus", {
@@ -86,7 +91,7 @@ function setupListeners() {
 
   socket.on("connect_error", (error) => {
     console.error(`Connection Error: ${error.message}`);
-    socket = null; // Ensure socket is null on connection error
+    socket = null;
     isConnected = false;
     document.dispatchEvent(
       new CustomEvent("networkStatus", {
@@ -97,8 +102,8 @@ function setupListeners() {
 
   // --- Lobby/Room Listeners ---
   socket.on("assignPlayerData", (data) => {
-    console.log("Received player assignment:", data); // { playerId: '...', playerIndex: X }
-    localPlayerId = data.playerId; // Server might re-assign ID on room join
+    console.log("Received player assignment:", data);
+    localPlayerId = data.playerId;
     localPlayerIndex = data.playerIndex;
     document.dispatchEvent(
       new CustomEvent("assignPlayer", {
@@ -107,17 +112,40 @@ function setupListeners() {
     );
   });
 
-  socket.on("roomJoined", (roomData) => {
-    console.log("Successfully joined room:", roomData); // { roomId: 'abc', gameState: {...}, players: [...] }
-    // Initialize or update game state based on server data
-    Object.assign(gameState, roomData.gameState); // Overwrite local state
-    console.log("Local gameState updated from server.");
+  socket.on("room_joined", (data) => {
+    console.log("Room joined/created:", data);
+    // data should include { roomId, players, initialGameState, yourPlayerIndex }
+    if (data.error) {
+      console.error("Room join/create error:", data.error);
+      // TODO: Display error to user on the setup screen
+      return;
+    }
+
+    // Initial game state update from server
+    if (data.initialGameState) {
+      Object.assign(gameState, data.initialGameState);
+      console.log("Local gameState updated from server.");
+      document.dispatchEvent(
+        new CustomEvent("gameStateUpdate", {
+          detail: { state: data.initialGameState },
+        })
+      );
+    }
+    assignedPlayerIndex = data.yourPlayerIndex;
+    gameState.roomId = data.roomId; // Set Room ID
+    // Explicitly set players array after Object.assign
+    if (data.players) {
+      gameState.players = data.players;
+    }
+    console.log(
+      `Assigned player index: ${data.yourPlayerIndex}, Room ID: ${data.roomId}`
+    );
+    // Dispatch event for UI to potentially update player list, etc.
     document.dispatchEvent(
-      new CustomEvent("gameStateUpdate", {
-        detail: { state: roomData.gameState },
+      new CustomEvent("roomUpdate", {
+        detail: { roomId: data.roomId, players: data.players },
       })
     );
-    document.dispatchEvent(new CustomEvent("roomUpdate", { detail: roomData }));
   });
 
   socket.on("joinFailed", (message) => {
@@ -126,13 +154,18 @@ function setupListeners() {
       new CustomEvent("serverError", { detail: `Join Failed: ${message}` })
     );
     // Maybe disconnect or allow user to try again?
-    disconnect(); // Disconnect on failure for now
+    disconnect();
   });
 
   socket.on("roomCreated", (roomData) => {
     console.log("Successfully created and joined room:", roomData);
     // Initialize or update game state based on server data
     Object.assign(gameState, roomData.gameState);
+    gameState.roomId = roomData.roomId;
+    // Explicitly set players array after Object.assign
+    if (roomData.players) {
+      gameState.players = roomData.players;
+    }
     console.log("Local gameState updated from server.");
     document.dispatchEvent(
       new CustomEvent("gameStateUpdate", {
@@ -147,15 +180,24 @@ function setupListeners() {
     document.dispatchEvent(
       new CustomEvent("serverError", { detail: `Create Failed: ${message}` })
     );
-    disconnect(); // Disconnect on failure for now
+    disconnect();
   });
 
   // Example: Update player list in a room when someone joins/leaves
   socket.on("roomInfoUpdate", (roomData) => {
-    console.log("Received roomInfoUpdate:", roomData); // { players: [...] }
-    // Update player list, maybe current player indicator if changed
-    // Avoid overwriting entire gameState here, just update relevant parts if needed
-    // For now, just dispatch the event for UI update
+    console.log("Received roomInfoUpdate:", roomData);
+    // --- Update local gameState.players ---
+    if (roomData && roomData.players) {
+      // Assuming roomData.players is an array of player objects
+      // Make sure the structure matches what the client expects
+      gameState.players = roomData.players;
+      console.log("Updated local gameState.players:", gameState.players);
+    } else {
+      console.warn("roomInfoUpdate received without players data?");
+    }
+    // -------------------------------------
+
+    // Dispatch event for UI to update (e.g., player list display)
     document.dispatchEvent(new CustomEvent("roomUpdate", { detail: roomData }));
   });
 
@@ -163,15 +205,40 @@ function setupListeners() {
 
   // Server sends the complete state periodically or after major events
   socket.on("gameStateUpdate", (serverGameState) => {
-    console.log("Received gameStateUpdate from server");
-    // Carefully merge serverGameState into local gameState
-    // Overwriting might be okay if server is fully authoritative
+    // Ensure room ID is preserved if server state doesn't include it
+    const currentRoomId = gameState.roomId;
+    // console.log("Received gameStateUpdate:", serverGameState);
+    // Directly update the entire local game state
+    // Be careful: This assumes the server sends the complete, correct state
     Object.assign(gameState, serverGameState);
-    console.log("Local gameState updated from server gameStateUpdate event.");
-    // Dispatch event so UI/Drawing can react
+    // Restore room ID if it was overwritten by server state
+    if (!gameState.roomId && currentRoomId) {
+      gameState.roomId = currentRoomId;
+    }
+    // Dispatch an event for UI/other modules to react
     document.dispatchEvent(
-      new CustomEvent("gameStateUpdate", { detail: { state: serverGameState } })
+      new CustomEvent("gameStateUpdate", { detail: { state: gameState } })
     );
+  });
+
+  // Listen for the game starting (triggered by host)
+  socket.on("game_started", (initialGameState) => {
+    console.log("Received game_started event", initialGameState);
+    gameState.gameStarted = true;
+    // Update state if provided (might be the same as initial join state)
+    if (initialGameState) {
+      const currentRoomId = gameState.roomId;
+      Object.assign(gameState, initialGameState);
+      if (!gameState.roomId && currentRoomId) {
+        gameState.roomId = currentRoomId;
+      }
+      gameState.gameStarted = true;
+    }
+    // Dispatch update to hide 'Start Game' button, etc.
+    document.dispatchEvent(
+      new CustomEvent("gameStateUpdate", { detail: { state: gameState } })
+    );
+    // Potentially trigger first turn or wait for server 'turn' event
   });
 
   // Notification that it's your turn
@@ -180,7 +247,7 @@ function setupListeners() {
     console.log(`It's your turn! Data:`, turnData);
     // Update local state based on turnData if necessary
     // gameState.currentPlayerIndex = turnData.currentPlayerIndex;
-    // gameState.currentCard = turnData.currentCard; // Server might pre-draw
+    // gameState.currentCard = turnData.currentCard;
     // For now, assume gameStateUpdate handles state, just signal turn start
     document.dispatchEvent(
       new CustomEvent("turnStart", {
@@ -250,7 +317,7 @@ export function createRoom() {
     return;
   }
   console.log("Requesting to create a new room...");
-  socket.emit("createRoom"); // Server assigns room code
+  socket.emit("createRoom");
 }
 
 /**
@@ -258,7 +325,7 @@ export function createRoom() {
  * @param {string} actionType - e.g., 'drawCard', 'selectPawn', 'selectMove'
  * @param {object} payload - Data associated with the action.
  */
-export function emitAction(actionType, payload) {
+export function emitAction(actionType, payload = {}) {
   if (!socket || !isConnected) {
     console.error(`Cannot emit action '${actionType}': Not connected.`);
     // Should we show an error to the user?
@@ -271,8 +338,26 @@ export function emitAction(actionType, payload) {
     return;
   }
 
-  console.log(`Emitting action: ${actionType}`, payload || "");
-  socket.emit("playerAction", { type: actionType, payload: payload || {} });
+  console.log(
+    `Emitting action: ${actionType}, Player: ${localPlayerIndex}, Payload:`,
+    payload
+  );
+  socket.emit("playerAction", {
+    roomId: gameState.roomId,
+    playerId: localPlayerIndex,
+    actionType: actionType,
+    payload: payload,
+  });
+}
+
+// Function for the host to request starting the game
+export function requestStartGame() {
+  if (socket && socket.connected) {
+    console.log(`Emitting 'start_game' for room: ${gameState.roomId}`);
+    socket.emit("start_game", { roomId: gameState.roomId });
+  } else {
+    console.error("Cannot start game: Socket not connected.");
+  }
 }
 
 // --- Example Wrappers for Specific Actions ---

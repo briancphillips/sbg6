@@ -9,8 +9,9 @@ import {
   isPawnAtStart,
   isPawnMovable,
   resetTurnState,
+  getPawnObjectById,
 } from "./gameState.js";
-import { PLAYERS } from "./constants.js";
+import { PLAYERS, BOARD_SIZE, BOARD_MARGIN } from "./constants.js";
 import { drawGame, isClickOnPawn, isClickOnSquare } from "./drawing.js";
 import {
   getPossibleMovesForPawn,
@@ -27,7 +28,7 @@ import {
   requestMoveSelection,
   requestSorry,
   requestSwap,
-  emitAction,
+  emitAction, // Generic action emitter
 } from "./network.js"; // Import network request functions
 
 // Element references
@@ -42,6 +43,8 @@ let resetButton;
 let connectionStatusEl; // Added for online mode
 let playerListContainerEl; // Added for online mode
 let playerListEl; // Added for online mode
+let roomCodeDisplayEl; // Added for online mode
+let startGameOnlineButtonEl; // Added for online mode
 let skipTurnButton; // Added
 // Scenario Panel Elements (passed from main.js)
 let toggleScenarioPanelButton;
@@ -67,6 +70,8 @@ export function initUI(elements) {
   connectionStatusEl = elements.connectionStatusEl;
   playerListContainerEl = elements.playerListContainerEl;
   playerListEl = elements.playerListEl;
+  roomCodeDisplayEl = elements.roomCodeDisplayEl;
+  startGameOnlineButtonEl = elements.startGameOnlineButtonEl;
   // Store ref to skip button
   skipTurnButton = elements.skipTurnButton;
   // Store refs to scenario elements
@@ -87,27 +92,18 @@ export function initUI(elements) {
     console.warn("Skip turn button element not passed to initUI.");
   }
 
-  // Listen for player assignment from network module
-  window.removeEventListener("assignPlayer", handleAssignPlayer);
-  window.addEventListener("assignPlayer", handleAssignPlayer);
-  // Listen for game state updates to redraw/update UI
-  window.removeEventListener("gameStateUpdate", handleGameStateUpdate);
-  window.addEventListener("gameStateUpdate", handleGameStateUpdate);
-  // Listen for room updates to update player list
-  window.removeEventListener("roomUpdate", handleRoomUpdate);
-  window.addEventListener("roomUpdate", handleRoomUpdate);
-  // Listen for turn start signals
-  window.removeEventListener("turnStart", handleTurnStart);
-  window.addEventListener("turnStart", handleTurnStart);
-  // Listen for server messages
-  window.removeEventListener("serverMessage", handleServerMessage);
-  window.addEventListener("serverMessage", handleServerMessage);
-  // Listen for server errors
-  window.removeEventListener("serverError", handleServerError);
-  window.addEventListener("serverError", handleServerError);
-  // Listen for game over signals
-  window.removeEventListener("gameOverUpdate", handleGameOverUpdate);
-  window.addEventListener("gameOverUpdate", handleGameOverUpdate);
+  // Add listeners for events dispatched by network.js
+  document.addEventListener("assignPlayer", handleAssignPlayer);
+  document.addEventListener("gameStateUpdate", handleGameStateUpdate);
+  document.addEventListener("roomUpdate", handleRoomUpdate);
+  document.addEventListener("turnStart", handleTurnStart);
+  document.addEventListener("serverMessage", handleServerMessage);
+  document.addEventListener("serverError", handleServerError);
+  document.addEventListener("gameOverUpdate", handleGameOverUpdate);
+
+  // Setup canvas dimensions (assuming it's consistent)
+  const boardSize = BOARD_SIZE + BOARD_MARGIN * 2;
+  canvas.width = boardSize;
 
   // Initialize scenario manager UI
   initScenarioManagerUI();
@@ -132,11 +128,8 @@ function handleGameStateUpdate(event) {
 
 function handleRoomUpdate(event) {
   console.log("UI received roomUpdate event");
-  // Update player list based on new room data
-  // Assuming roomData.players exists
-  if (event.detail && event.detail.players) {
-    updatePlayerList(event.detail.players);
-  }
+  // Full UI update needed as room changes might affect more than just the list
+  updateUI();
 }
 
 function handleTurnStart(event) {
@@ -239,6 +232,11 @@ function initScenarioManagerUI() {
  * @param {number} [localIdx=localPlayerIndex] - The index of the local player (defaults to module state).
  */
 export function updateUI(mode = currentGameMode, localIdx = localPlayerIndex) {
+  console.log(`--- updateUI called ---`);
+  console.log(`  Mode: ${mode}, Local Index: ${localIdx}`);
+  console.log(
+    `  Game State: Started=${gameState.gameStarted}, CurrentPlayer=${gameState.currentPlayerIndex}, PlayerCount=${gameState.players?.length}`
+  );
   currentGameMode = mode; // Update internal mode tracker
 
   // Reset temporary error styling
@@ -251,8 +249,13 @@ export function updateUI(mode = currentGameMode, localIdx = localPlayerIndex) {
     gameState.currentPlayerIndex >= 0
   ) {
     const player = gameState.players[gameState.currentPlayerIndex];
-    currentPlayerNameEl.textContent = player.details.name;
-    currentPlayerColorEl.style.backgroundColor = player.details.color;
+    // Handle both local (player.details) and online (player.name) structures
+    currentPlayerNameEl.textContent =
+      player.details?.name || player.name || "Unknown";
+    // Handle both local (player.index) and online (player.playerIndex) structures
+    const playerIdx = player.index ?? player.playerIndex; // Use nullish coalescing
+    currentPlayerColorEl.style.backgroundColor =
+      PLAYERS[playerIdx]?.color || "transparent"; // Use optional chaining for safety
   } else {
     // Handle cases where players might not be initialized yet or index is invalid
     currentPlayerNameEl.textContent = "-";
@@ -322,6 +325,28 @@ export function updateUI(mode = currentGameMode, localIdx = localPlayerIndex) {
     }
   }
 
+  // Room Code Display
+  if (roomCodeDisplayEl) {
+    if (gameState.roomId) {
+      roomCodeDisplayEl.classList.remove("hidden");
+      // Assuming gameState.roomId exists and is populated by network.js
+      roomCodeDisplayEl.querySelector("span").textContent = gameState.roomId;
+    } else {
+      roomCodeDisplayEl.classList.add("hidden");
+    }
+  }
+
+  // Start Game Button Display (Host only, before game starts)
+  if (startGameOnlineButtonEl) {
+    if (localIdx === 0 && !gameState.gameStarted) {
+      startGameOnlineButtonEl.classList.remove("hidden");
+      startGameOnlineButtonEl.disabled = false; // Re-enable if it was disabled
+      startGameOnlineButtonEl.textContent = "Start Online Game";
+    } else {
+      startGameOnlineButtonEl.classList.add("hidden");
+    }
+  }
+
   // Update win message
   // This is now handled by handleGameOverUpdate based on server message
   if (!gameState.gameOver) {
@@ -345,20 +370,21 @@ function updatePlayerList(players) {
   if (players && players.length > 0) {
     players.forEach((player, index) => {
       const li = document.createElement("li");
-      // Use player.details if available, fallback for robustness
-      const color = player.details ? player.details.color : "#888";
-      const name = player.details ? player.details.name : `Player ${index + 1}`;
-      const type =
-        player.type || (index === localPlayerIndex ? "human" : "remote"); // Infer type
+      // Handle both local and online player structures
+      const playerIdx = player.index ?? player.playerIndex;
+      const color = PLAYERS[playerIdx]?.color || "#888888"; // Fallback color
+      const name =
+        player.details?.name || player.name || `Player ${playerIdx + 1}`;
 
       li.style.color = color;
-      // Use player.name from server if provided, else fallback
-      li.textContent = `${player.name || name} (${type})`;
-      if (index === localPlayerIndex) {
-        li.textContent += " (You)";
+      // Use determined name, indicate if it's the local player
+      li.textContent = `${name} (${
+        playerIdx === localPlayerIndex ? "You" : "Remote"
+      })`;
+      if (playerIdx === localPlayerIndex) {
         li.style.fontWeight = "bold";
       }
-      if (index === gameState.currentPlayerIndex) {
+      if (playerIdx === gameState.currentPlayerIndex) {
         li.textContent += " *"; // Indicate current turn
         li.style.fontStyle = "italic";
       }
@@ -757,10 +783,9 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
 // Performs the action of selecting a move/destination square
 // In Online mode, if it's the local player's turn, sends request to server
 // In Local mode, executes the move (or part of it for split 7)
-export function performMoveSelection(playerIndex, move) {
+export function performMoveSelection(move) {
   if (currentGameMode === "online") {
-    if (playerIndex === localPlayerIndex) {
-      // console.log("Requesting move selection:", move);
+    if (gameState.currentPlayerIndex === localPlayerIndex) {
       requestMoveSelection(move);
       // Disable interaction until server responds
       canvas.classList.remove("clickable");
@@ -777,7 +802,10 @@ export function performMoveSelection(playerIndex, move) {
   }
 
   // --- Local Mode Logic ---
-  console.log(`Local Move Selection: Player ${playerIndex}, Move:`, move);
+  console.log(
+    `Local Move Selection: Player ${gameState.currentPlayerIndex}, Move:`,
+    move
+  );
 
   if (!gameState.selectedPawn) {
     console.error("Move selected but no pawn is selected!");
@@ -815,7 +843,10 @@ export function performMoveSelection(playerIndex, move) {
 
       // Check if turn already advanced by executeMove (shouldn't happen now)
       // or if game ended
-      if (gameState.currentPlayerIndex === playerIndex && !gameState.gameOver) {
+      if (
+        gameState.currentPlayerIndex === localPlayerIndex &&
+        !gameState.gameOver
+      ) {
         const remainingValue = 7 - moveValue;
         // console.log(`Split-7: Remaining value = ${remainingValue}`);
         if (remainingValue > 0) {
@@ -828,7 +859,7 @@ export function performMoveSelection(playerIndex, move) {
           // console.log("Split-7: Finding other pawns for second move...");
 
           // Find OTHER selectable pawns for the second move
-          gameState.players[playerIndex].pawns.forEach((pawn) => {
+          gameState.players[localPlayerIndex].pawns.forEach((pawn) => {
             // console.log(
             //   `  - Checking Pawn ID ${pawn.id} (Type: ${pawn.positionType})`
             // );
@@ -943,7 +974,12 @@ function handleCanvasClick(event) {
     case "select-11-pawn":
     case "select-7-pawn1":
     case "select-7-pawn2":
-      clickedPawn = isClickOnPawn(clickX, clickY, gameState.selectablePawns);
+      // Get actual pawn objects from IDs stored in gameState.selectablePawns
+      const selectablePawnObjects = gameState.selectablePawns
+        .map((pawnId) => getPawnObjectById(playerIndex, pawnId))
+        .filter((p) => p !== null); // Filter out nulls if any pawn wasn't found
+
+      clickedPawn = isClickOnPawn(clickX, clickY, selectablePawnObjects);
       if (clickedPawn) {
         // console.log(`Clicked on Selectable Pawn: ${clickedPawn.id}`);
         // Call the correct function based on mode
@@ -964,11 +1000,20 @@ function handleCanvasClick(event) {
     // --- Target Selection States ---
     case "select-sorry-target":
     case "select-11-swap-target":
-      clickedTarget = isClickOnPawn(
-        clickX,
-        clickY,
-        gameState.targetableOpponents
-      );
+      // Targetable opponents are stored by ID, need to get objects
+      const targetableOpponentObjects = gameState.targetableOpponents
+        .map((pawnId) => {
+          // Need to find which player this opponent belongs to
+          for (let i = 0; i < gameState.players.length; i++) {
+            if (i === playerIndex) continue; // Skip current player
+            const opponentPawn = getPawnObjectById(i, pawnId);
+            if (opponentPawn) return opponentPawn;
+          }
+          return null; // Pawn ID not found among opponents
+        })
+        .filter((p) => p !== null);
+
+      clickedTarget = isClickOnPawn(clickX, clickY, targetableOpponentObjects);
       if (clickedTarget) {
         // console.log(`Clicked on Targetable Opponent: ${clickedTarget.id}`);
         if (gameState.currentAction === "select-sorry-target") {
@@ -1011,7 +1056,17 @@ function handleCanvasClick(event) {
       clickedTarget = isClickOnPawn(
         clickX,
         clickY,
+        // Need opponent objects here too for 11-swap
         gameState.targetableOpponents
+          .map((pawnId) => {
+            for (let i = 0; i < gameState.players.length; i++) {
+              if (i === playerIndex) continue;
+              const opponentPawn = getPawnObjectById(i, pawnId);
+              if (opponentPawn) return opponentPawn;
+            }
+            return null;
+          })
+          .filter((p) => p !== null)
       );
       if (clickedTarget) {
         // console.log(

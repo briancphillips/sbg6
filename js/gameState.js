@@ -55,6 +55,7 @@ export const gameState = {
     secondPawn: null,
   },
   splitMandatory: false,
+  gameStarted: false, // Flag for online games
 };
 
 // Game state utility functions
@@ -251,4 +252,46 @@ export function initializeGameState(playerTypes = {}) {
   };
   gameState.splitMandatory = false;
   gameState.message = `${PLAYERS[0].name}'s turn. Draw a card.`;
+}
+
+// Helper to get a specific pawn object by player and pawn ID
+export function getPawnObjectById(playerIndex, pawnId) {
+  // Ensure playerIndex is valid for the current gameState.players array
+  if (playerIndex < 0 || playerIndex >= gameState.players.length) {
+    console.warn(`getPawnObjectById: Invalid playerIndex ${playerIndex}`);
+    return null;
+  }
+  const player = gameState.players[playerIndex];
+  if (!player) {
+    console.warn(
+      `getPawnObjectById: Player object not found for index ${playerIndex}`
+    );
+    return null;
+  }
+  // Ensure the pawns array exists for this player
+  if (!player.pawns) {
+    console.warn(
+      `getPawnObjectById: Pawns array not found for player index ${playerIndex}`
+    );
+    return null;
+  }
+  // Find the pawn by ID within that player's pawns array
+  console.log(
+    `[getPawnObjectById] Searching for Player ${playerIndex}, Pawn ${pawnId} in:`,
+    player.pawns
+  );
+  const foundPawn = player.pawns.find((p) => p && p.id === pawnId); // Add check for p itself
+  if (!foundPawn) {
+    // This might happen if server/client states are slightly out of sync during updates
+    // console.warn(`getPawnObjectById: Pawn with ID ${pawnId} not found for player index ${playerIndex}`);
+    console.log(
+      `[getPawnObjectById] Pawn ID ${pawnId} NOT found for Player ${playerIndex}.`
+    );
+  } else {
+    console.log(
+      `[getPawnObjectById] Found pawn:`,
+      JSON.parse(JSON.stringify(foundPawn))
+    ); // Log a clone
+  }
+  return foundPawn || null;
 }

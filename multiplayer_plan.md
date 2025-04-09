@@ -78,54 +78,91 @@ _(Requires separate Node.js project)_
 ## V. Local AI Multiplayer Implementation
 
 1.  **AI Logic Module (`ai.js`):**
-    - Create a new `ai.js` module.
-    - Implement `aiTakeTurn(playerIndex)` function.
+    - [x] Create a new `ai.js` module.
+    - [x] Implement `aiTakeTurn(playerIndex)` function.
     - Inside `aiTakeTurn`:
-      - Simulate drawing a card (using existing `drawCard` logic, but potentially without UI update until decision is made).
-      - Analyze the drawn card and current `gameState`.
-      - Call `getPossibleMovesForPawn` for all AI pawns to find valid actions.
-      - Implement decision-making heuristics:
-        - Prioritize getting pawns out of start (cards 1, 2).
-        - Prioritize "Sorry!" bumps if available.
-        - Prioritize safety zone entry/movement.
-        - Prioritize slides (especially bumping slides).
-        - Prioritize moves that land on opponent pawns (for bumping).
-        - Consider card 7 split strategy.
-        - Consider card 11 swap strategy.
-        - Default to simple forward movement.
-      - Select the "best" action based on heuristics.
-      - Execute the chosen action using refactored action functions (e.g., `executeMove`, `executeSorry`).
-2.  **Game Loop Integration:**
-    - Modify the turn transition logic (likely in `main.js` or `ui.js` after a move completes or turn skips).
-    - Check `gameState.players[newPlayerIndex].type`.
-    - If `'ai'`, disable human input and call `aiTakeTurn(newPlayerIndex)` after a short delay (e.g., `setTimeout(aiTakeTurn, 1000)`).
+      - [x] Simulate drawing a card (using existing `drawCard` logic).
+      - [x] Analyze the drawn card and current `gameState` (basic check if action possible).
+      - [ ] Call `getPossibleMovesForPawn` for all AI pawns to find valid actions. (*Note: Relies on other functions to populate gameState*)
+      - [ ] Evaluate the potential outcomes of each possible move. (*Note: Currently picks first option*)
+      - [ ] Choose the best move based on a defined heuristic. (*Note: Currently picks first option*)
+        - *Specific Heuristics to Consider:*
+        - [ ] Prioritize getting pawns out of start (cards 1, 2).
+        - [ ] Prioritize "Sorry!" bumps if available.
+        - [ ] Prioritize safety zone entry/movement.
+        - [ ] Prioritize slides (especially bumping slides).
+        - [ ] Prioritize moves that land on opponent pawns (for bumping).
+        - [ ] Consider card 7 split strategy.
+        - [ ] Consider card 11 swap strategy.
+        - [ ] Default to simple forward movement.
+      - [x] Execute the chosen move by calling the appropriate game logic function (e.g., `performMove`). (*Note: Executes the *first* valid move*)
+    - [ ] Handle the end of the AI's turn, potentially including a slight delay for visual effect before calling `endTurn`. (*Note: Delays exist, turn end handled by move functions*)
+2.  **Game Loop Integration:** (`main.js` already handles this)
+    - [x] Modify the turn transition logic (likely in `main.js` or `ui.js` after a move completes or turn skips).
+    - [x] Check `gameState.players[newPlayerIndex].type`.
+    - [x] If `'ai'`, disable human input and call `aiTakeTurn(newPlayerIndex)` after a short delay (e.g., `setTimeout(aiTakeTurn, 1000)`).
+    - [x] If `'human'`, re-enable input for the correct player (this might already be handled).
 3.  **UI Setup:**
-    - Implement the UI elements for selecting human/AI players before starting a local game.
-    - Store the selected player types in `gameState.players`.
+    - [x] Implement the UI elements for selecting human/AI players before starting a local game.
+    - [ ] Store the selected player types in `gameState.players`.
 
-## VI. Refactoring and Integration
+## VI. Networked Multiplayer Setup (Client-Side - `network.js`)
 
-1.  **Isolate Core Logic:** Ensure `board.js`, `cards.js`, `moves.js`, `constants.js`, and `drawing.js` remain focused on game rules and representation, independent of player type or network status.
-2.  **Centralize Action Execution:** Ensure that whether an action originates from human input, AI, or the network, it goes through the same validation and state update functions (e.g., `executeMove`).
-3.  **Event-Driven Updates:** Rely on events or callbacks after actions complete to trigger UI updates and turn transitions, rather than assuming synchronous execution.
+1.  **Establish Connection:**
+    - [x] Import the Socket.IO client library. (*Assumed included in HTML*)
+    - [x] Connect to the Socket.IO server (`io()`).
+    - [x] Handle connection success (`connect` event).
+    - [x] Handle connection errors (`connect_error` event).
+2.  **Room Management:**
+    - [x] Emit event to server to create or join a room (e.g., `join_room`, passing desired room ID).
+    - [x] Listen for server confirmation of room join/creation (e.g., `room_joined`, receiving initial room state/player list).
+    - [x] Listen for updates on players joining/leaving the room (e.g., `roomInfoUpdate`).
+    - [x] Update UI based on room changes. (*Note: Done via event dispatch*)
+3.  **UI Display:**
+    - [x] Implement UI to display room code, player list, and a "Start Game" button (host only).
+4.  **Start Game Emission:**
+    - [x] Emit a `start_game` event when the host clicks the button.
+5.  **Start Game Reception:**
+    - [x] Listen for a `game_started` signal from the server.
 
-## VII. Testing
+## VII. Client-Side Action Emission
+
+1.  **Modify Action Functions:**
+    - [x] Identify functions in `ui.js` or `main.js` that trigger game actions (draw, select pawn, select move, skip).
+2.  **Check Game Mode:**
+    - [x] Within these functions, check `currentGameMode`.
+3.  **Emit Network Events:**
+    - [x] If `'online'`, emit a specific event to the server (e.g., `player_action`) with the action type and payload (e.g., `{ type: 'move', move: {...} }`).
+    - [x] Use helper functions in `network.js` (e.g., `requestDrawCard()`, `requestMoveSelection(move)`).
+4.  **Bypass Local Logic:**
+    - [x] If `'online'`, prevent the function from executing the local game logic (e.g., calling `executeMove` directly).
+
+## VIII. Client-Side State Synchronization
+
+1.  **Listen for State Updates:**
+    - [x] Listen for server broadcasts containing the updated `gameState` (or specific state changes) (e.g., `game_state_update`).
+    - [x] When an update is received:
+      - [x] Update the local `gameState`.
+      - [x] Re-render the UI based on the new state. (*Note: Done via event dispatch*)
+2.  **Turn Handling:**
+    - [x] Rely on the server-provided `gameState.currentPlayerIndex` to know whose turn it is.
+    - [x] Enable/disable input based on whether `localPlayerIndex` matches the current turn index received from the server. (*Note: Done via event dispatch*)
+
+## IX. Testing
 
 1.  **Local AI:**
-    - Test games with 1 Human + 3 AI, 1 Human + 1 AI, etc.
-    - Verify AI makes valid moves according to rules.
-    - Observe AI decision-making – does it behave reasonably?
-    - Test edge cases (AI has no moves, AI wins).
-2.  **Networked:**
-    - Use multiple browser windows/tabs to simulate players.
-    - Test joining/leaving games.
-    - Verify state synchronization across all clients.
-    - Test player actions being correctly relayed and validated.
-    - Test handling of disconnections.
+    - [ ] Test games with 1 Human + 3 AI, 1 Human + 1 AI, etc.
+    - [ ] Verify AI makes valid moves according to heuristics.
+    - [ ] Verify game progresses correctly with AI turns.
+2.  **Networked Game:**
+    - [ ] Test joining/leaving rooms.
+    - [ ] Test game start synchronization.
+    - [ ] Test player actions being correctly relayed and validated.
+    - [ ] Test handling of disconnections.
 
-## VIII. Future Enhancements (Optional)
+## X. Future Enhancements (Optional)
 
-- Implement different AI difficulty levels.
-- Add chat functionality for networked games.
-- Add spectator mode.
-- Improve lobby system (player names, game settings).
+- [ ] Implement different AI difficulty levels.
+- [ ] Add chat functionality for networked games.
+- [ ] Add spectator mode.
+- [ ] Improve lobby system (player names, game settings).

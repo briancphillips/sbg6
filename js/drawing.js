@@ -568,7 +568,11 @@ export function drawPawns() {
           }
 
           // Highlight selected pawn
-          if (gameState.selectedPawn === pawn) {
+          if (
+            gameState.selectedPawn &&
+            gameState.selectedPawn.playerIndex === pawn.playerIndex &&
+            gameState.selectedPawn.id === pawn.id
+          ) {
             drawCircle(
               coords.x,
               coords.y,

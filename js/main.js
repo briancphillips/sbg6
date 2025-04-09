@@ -7,7 +7,13 @@ import { initUI, updateUI, determineActionsForCard } from "./ui.js";
 import { debugSafetyEntries, diagnoseSafetyZones } from "./moves.js";
 import { listScenarios, loadScenarioState } from "./scenarioManager.js";
 import { aiTakeTurn } from "./ai.js"; // Import AI logic
-import { connect, joinRoom, createRoom, disconnect } from "./network.js"; // Import network module
+import {
+  connect,
+  joinRoom,
+  createRoom,
+  disconnect,
+  requestStartGame,
+} from "./network.js"; // Import network module
 import { PLAYERS } from "./constants.js"; // Import PLAYERS constant
 
 // --- Module-Level Variables for DOM Elements ---
@@ -39,6 +45,8 @@ let connectionStatusEl;
 let playerListContainerEl;
 let playerListEl;
 let skipTurnButton; // Added
+let roomCodeDisplayEl; // Added for online mode
+let startGameOnlineButtonEl; // Added for online mode
 
 // Scenario Panel Elements (moved from ui.js)
 let toggleScenarioPanelButton;
@@ -78,37 +86,14 @@ export function initializeGame(playerTypes = { 1: "ai", 2: "ai", 3: "ai" }) {
   // debugSafetyEntries(); // Keep commented or remove if not needed at startup
   // diagnoseSafetyZones(); // Keep commented or remove if not needed at startup
 
-  // Initialize UI - Pass ALL required element references
-  initUI({
-    canvas: canvas, // Use module-level variable
-    currentPlayerNameEl: currentPlayerNameEl,
-    currentPlayerColorEl: currentPlayerColorEl,
-    cardDrawnEl: cardDrawnEl,
-    messageAreaEl: messageAreaEl,
-    winMessageEl: winMessageEl,
-    drawCardButton: drawCardButton, // Use module-level variable
-    resetButton: resetButton, // Use module-level variable
-    connectionStatusEl: connectionStatusEl,
-    playerListContainerEl: playerListContainerEl,
-    playerListEl: playerListEl,
-    skipTurnButton: skipTurnButton, // Pass skip turn button
-    // Pass Scenario Panel Elements
-    toggleScenarioPanelButton: toggleScenarioPanelButton,
-    scenarioContent: scenarioContent,
-    scenarioPlayerSelect: scenarioPlayerSelect,
-    scenarioButtons: scenarioButtons,
-  });
-
   // Remove old listeners if any (important for reset)
   window.removeEventListener("resetGame", handleResetGame);
   window.removeEventListener("nextTurn", handleNextTurn);
-  window.removeEventListener("networkStatus", handleNetworkStatus);
   window.removeEventListener("loadScenarioRequest", handleScenarioLoad); // Use correct handler name
 
   // Set up event listeners for game events
   window.addEventListener("resetGame", handleResetGame);
   window.addEventListener("nextTurn", handleNextTurn);
-  window.addEventListener("networkStatus", handleNetworkStatus);
   window.addEventListener("loadScenarioRequest", handleScenarioLoad); // Use correct handler name
 
   // Initial UI update and draw
@@ -415,6 +400,8 @@ document.addEventListener("DOMContentLoaded", () => {
   drawCardButton = document.getElementById("drawCardButton");
   resetButton = document.getElementById("resetButton");
   skipTurnButton = document.getElementById("skipTurnButton"); // Select skip button
+  roomCodeDisplayEl = document.getElementById("roomCodeDisplay");
+  startGameOnlineButtonEl = document.getElementById("startGameOnlineButton");
   toggleScenarioPanelButton = document.getElementById("toggleScenarioPanel"); // Select scenario button
   scenarioContent = document.getElementById("scenarioContent"); // Select scenario content
   scenarioPlayerSelect = document.getElementById("scenarioPlayer"); // Select scenario player select
@@ -431,6 +418,29 @@ document.addEventListener("DOMContentLoaded", () => {
   gameModeRadios = Array.from(
     document.querySelectorAll('input[name="gameMode"]')
   );
+
+  // Initialize UI elements early with gathered references
+  initUI({
+    canvas,
+    currentPlayerNameEl,
+    currentPlayerColorEl,
+    cardDrawnEl,
+    messageAreaEl,
+    winMessageEl,
+    drawCardButton,
+    resetButton,
+    connectionStatusEl, // Pass online elements
+    playerListContainerEl,
+    playerListEl,
+    roomCodeDisplayEl,
+    startGameOnlineButtonEl,
+    skipTurnButton, // Pass skip button
+    // Pass scenario elements
+    toggleScenarioPanelButton,
+    scenarioContent,
+    scenarioPlayerSelect,
+    scenarioButtons,
+  });
 
   // Initial setup: Ensure only local setup is visible
   handleModeChange(); // Set initial visibility based on default checked radio
@@ -454,27 +464,36 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Add listeners for online setup buttons
-  joinRoomButton.addEventListener("click", () => {
-    console.log("Join Room button clicked");
-    startOnlineGame(true); // true indicates joining
-  });
-  createRoomButton.addEventListener("click", () => {
-    console.log("Create Room button clicked");
-    startOnlineGame(false); // false indicates creating
-  });
+  joinRoomButton.addEventListener("click", () => startOnlineGame(true));
+  createRoomButton.addEventListener("click", () => startOnlineGame(false));
+
+  if (startGameOnlineButtonEl) {
+    startGameOnlineButtonEl.addEventListener("click", () => {
+      // Call the network function to request starting the game
+      // This function will need to be created in network.js
+      console.log("Start Online Game button clicked");
+      requestStartGame(); // Call the actual network function
+      // Temporarily disable button after click
+      startGameOnlineButtonEl.disabled = true;
+      startGameOnlineButtonEl.textContent = "Starting...";
+    });
+  }
 
   // --- Initialize Canvas Context ---
   if (canvas) {
     ctx = canvas.getContext("2d");
     if (!ctx) {
       console.error("Failed to get 2D context from canvas!");
+    } else {
+      initDrawing(ctx); // Initialize drawing module with context
+      initializeBoardPaths(); // Initialize board paths needed for drawing
     }
   } else {
     console.error("Canvas element not found during initialization!");
   }
 
-  // Add global listener for scenario load requests (ensure it's added only once)
-  // Moved into initializeGame to ensure removal works correctly on reset
+  // Add listener for network status changes early
+  document.addEventListener("networkStatus", handleNetworkStatus);
 
   console.log("DOM fully loaded and parsed. Initializing setup.");
 });
