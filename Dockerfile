@@ -19,9 +19,10 @@ COPY . .
 # Port for the Socket.IO server
 EXPOSE 3000
 # Port for the frontend static server ('serve')
-EXPOSE 8080
+EXPOSE 8083
 
 # Define command to run both the backend and frontend servers
 # - Runs the node server for Socket.IO
 # - Runs 'serve' for the static files (HTML, CSS, client JS) from the root
-CMD ["concurrently", "node js/server/server.js", "serve -s . -l 8080"]
+CMD concurrently "node js/server/server.js" "serve -s . -l tcp://0.0.0.0:8083"
+

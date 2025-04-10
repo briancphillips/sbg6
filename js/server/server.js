@@ -1,11 +1,18 @@
 // server.js (Conceptual Example)
 const { Server } = require("socket.io");
+const http = require('http');
 
-// Use port 3000 to match client's network.js SERVER_URL
-const io = new Server(3000, {
+// Create HTTP server and bind to all interfaces (0.0.0.0)
+const httpServer = http.createServer();
+const io = new Server(httpServer, {
   cors: {
     origin: "*", // Allow connections from any origin for simplicity (adjust for production)
   },
+});
+
+// Listen on all interfaces
+httpServer.listen(3000, '0.0.0.0', () => {
+  console.log('Socket.IO server listening on 0.0.0.0:3000');
 });
 
 let rooms = {}; // { roomId: { gameState: {...}, players: { socketId: { name: '', playerIndex: X, pawns: [...] } }, playerOrder: [socketId,...], ... } }
@@ -667,8 +674,11 @@ function determineActionsForCardServer(roomGameState, playerIndex, card) {
       let canMoveAnySplit = false;
       for (let i = 1; i <= 7; i++) {
         if (
-          getPossibleMovesForPawnServer(roomGameState, pawn, i.toString())
-            .length > 0
+          getPossibleMovesForPawnServer(
+            roomGameState,
+            pawn,
+            i.toString()
+          ).length > 0
         ) {
           canMoveAnySplit = true;
           break;
@@ -1133,76 +1143,6 @@ io.on("connection", (socket) => {
     }
 
     const room = rooms[roomId];
-    const playerInfo = room.players[socket.id]; // Get player info using socket.id
-
-    // Basic validation: Only host (playerIndex 0) can start
-    // And use the hostSocketId stored on the room object for robustness
-    if (socket.id !== room.hostSocketId) {
-      console.warn(
-        `Non-host player ${playerName} (Socket: ${socket.id}) attempted to start game in room ${roomId}. Host: ${room.hostSocketId}`
-      );
-      socket.emit("gameError", "Only the host can start the game.");
-      return;
-    }
-
-    if (room.gameState.gameStarted) {
-      console.warn(`Game already started in room ${roomId}.`);
-      socket.emit("gameError", "Game has already started.");
-      return;
-    }
-
-    // Validation: Check if enough players have joined (e.g., at least 2)
-    const joinedPlayersCount = room.gameState.players.filter(
-      (p) => p.socketId !== null
-    ).length;
-    if (joinedPlayersCount < 2) {
-      // Require at least 2 players to start
-      console.warn(
-        `Host tried to start game in room ${roomId} with only ${joinedPlayersCount} players.`
-      );
-      socket.emit(
-        "gameError",
-        `Need at least 2 players to start (currently ${joinedPlayersCount}).`
-      );
-      return;
-    }
-
-    console.log(`Host ${playerName} starting game in room ${roomId}.`);
-
-    // --- Update Game State for Start ---
-    room.gameState.gameStarted = true;
-    room.gameState.deck = createDeckServer(); // Initialize deck
-    shuffleDeckServer(room.gameState.deck); // Shuffle deck
-    room.gameState.discardPile = [];
-    room.gameState.currentPlayerIndex = 0; // Host (player 0) starts
-    room.gameState.currentCard = null; // No card drawn yet
-    const firstPlayerName = room.gameState.players[0].name;
-    room.gameState.message = `${firstPlayerName}'s turn. Draw a card.`;
-    room.gameState.gameOver = false;
-    // Reset other turn-specific state if necessary
-    // TODO: Server-side equivalent of resetTurnState() might be needed
-
-    // --- Broadcast Updated State and Message ---\
-    io.to(roomId).emit("message", `Game started by ${playerName}!`);
-    // Emit 'game_started' to notify clients the game has officially begun
-    io.to(roomId).emit("game_started", room.gameState);
-    // Immediately follow with gameStateUpdate to ensure clients have the latest state
-    io.to(roomId).emit("gameStateUpdate", room.gameState);
-
-    // Emit 'yourTurn' to the first player
-    const firstPlayerSocketId = room.playerOrder[0]; // Assuming playerOrder[0] is playerIndex 0's socketId
-    io.to(firstPlayerSocketId).emit("yourTurn", { currentPlayerIndex: 0 });
-  });
-
-  socket.on("playerAction", (action) => {
-    const roomId = players[socket.id]?.currentRoomId;
-    if (!roomId || !rooms[roomId]) {
-      console.error(`Action from ${socket.id} with no room?`, action);
-      socket.emit("gameError", "You are not in a room.");
-      return;
-    }
-
-    const room = rooms[roomId];
     const playerInfo = room.players[socket.id]; // Player info { name, playerIndex }
 
     if (!playerInfo) {
@@ -1213,8 +1153,8 @@ io.on("connection", (socket) => {
 
     // --- Action Validation ---
     // 1. Check if game has started
-    if (!room.gameState.gameStarted) {
-      socket.emit("gameError", "Game has not started yet.");
+    if (room.gameState.gameStarted) {
+      socket.emit("gameError", "Game has already started.");
       return;
     }
     // 2. Check if it's the player's turn
@@ -1338,6 +1278,7 @@ io.on("connection", (socket) => {
           playerInfo.playerIndex,
           pawnIdToSelect
         );
+
         if (!selectedPawnObject) {
           socket.emit(
             "gameError",
