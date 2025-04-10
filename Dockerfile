@@ -4,20 +4,15 @@ FROM node:18-alpine
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy server code and install backend dependencies
-COPY js/server ./js/server/
-RUN cd js/server && npm install --omit=dev
-
-# Copy the rest of the application source code into the container
-# (respecting .dockerignore)
+# Copy application source code into the container
 COPY . .
 
-# Install dependencies for the combined server
+# Install dependencies for the minimal server
 RUN npm init -y && npm install express socket.io
 
-# Only expose the combined server port
+# Only expose one port for the server
 EXPOSE 8083
 
-# Define command to run the combined server
-CMD ["node", "combined-server.js"]
+# Define command to run the minimal server
+CMD ["node", "minimal-server.js"]
 
