@@ -2,24 +2,103 @@
 const { Server } = require("socket.io");
 const http = require("http");
 
+// --- Enhanced logging setup ---
+function logWithTimestamp(type, message, data = null) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [${type}] ${message}`);
+  if (data) console.log(JSON.stringify(data, null, 2));
+}
+
+// Enable Socket.IO debug logs - will output to console
+process.env.DEBUG = "socket.io:*";
+
 // Create HTTP server and bind to all interfaces (0.0.0.0)
-const httpServer = http.createServer();
+const httpServer = http.createServer((req, res) => {
+  // Add request logging to see incoming connections
+  logWithTimestamp("HTTP", `${req.method} ${req.url} HTTP/${req.httpVersion}`);
+
+  // Simple health check endpoint
+  if (req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", time: new Date().toISOString() }));
+    return;
+  }
+
+  // For all other requests, return 404
+  res.writeHead(404);
+  res.end();
+});
+
+// Enhanced Socket.IO configuration with detailed logging
 const io = new Server(httpServer, {
   cors: {
     origin: "*", // Allow connections from any origin for simplicity (adjust for production)
+    methods: ["GET", "POST"],
+    credentials: true,
   },
+  // Add Socket.IO specific configuration parameters
+  connectTimeout: 45000, // Longer timeout for debugging (45s vs default 20s)
+  pingTimeout: 30000, // Longer ping timeout
+  pingInterval: 25000, // Longer ping interval
 });
 
 // Listen on all interfaces
 httpServer.listen(3000, "0.0.0.0", () => {
-  console.log("[Server Startup] Socket.IO server listening on 0.0.0.0:3000");
+  logWithTimestamp("Server", "Socket.IO server listening on 0.0.0.0:3000");
+
+  // Log the environment
+  logWithTimestamp("Server", "Environment details:", {
+    nodeVersion: process.version,
+    platform: process.platform,
+    architecture: process.arch,
+    env: process.env.NODE_ENV || "development",
+  });
 });
 
-// *** Add HTTP Server Error Logging ***
+// *** Enhanced HTTP Server Error Logging ***
 httpServer.on("error", (err) => {
-  console.error("[HTTP Server Error]", err);
+  logWithTimestamp("HTTP Error", `Server error: ${err.message}`, {
+    code: err.code,
+    syscall: err.syscall,
+    stack: err.stack,
+  });
 });
 // ************************************
+
+// --- IO Server Event Handlers ---
+io.engine.on("connection_error", (err) => {
+  logWithTimestamp("Socket.IO Engine", `Connection error:`, {
+    message: err.message,
+    code: err.code,
+    type: err.type,
+    stack: err.stack,
+    req: err.req
+      ? {
+          url: err.req.url,
+          headers: err.req.headers,
+          method: err.req.method,
+        }
+      : "No request data",
+  });
+});
+
+// Monitor Socket.IO server events
+io.on("connect_error", (err) => {
+  logWithTimestamp("Socket.IO Server", `Connect error:`, {
+    message: err.message,
+    code: err.code,
+    stack: err.stack,
+  });
+});
+
+// Log every Socket.IO handshake attempt, successful or not
+io.engine.on("initial_headers", (headers, req) => {
+  logWithTimestamp("Socket.IO Handshake", `Initial headers for ${req.url}`, {
+    url: req.url,
+    method: req.method,
+    headers: req.headers,
+  });
+});
 
 let rooms = {}; // { roomId: { gameState: {...}, players: { socketId: { name: '', playerIndex: X, pawns: [...] } }, playerOrder: [socketId,...], ... } }
 let players = {}; // { socketId: { name: '', currentRoomId: '...' } }
@@ -978,17 +1057,36 @@ function initializeGameStateServerVersion(roomId) {
 // --- Socket.IO Event Handlers ---
 
 // --- Main Connection Handler ---
-console.log("[Server Init] Setting up connection handler..."); // Log before handler setup
+logWithTimestamp("Server", "Setting up connection handler...");
 
 io.on("connection", (socket) => {
-  // *** Add Connection Attempt Logging ***
-  console.log(`[Connection] Attempt received. Socket ID: ${socket.id}`);
-  // ************************************
+  // Log detailed connection info
+  logWithTimestamp("Connection", `New connection: ${socket.id}`, {
+    socketId: socket.id,
+    handshake: {
+      url: socket.handshake.url,
+      address: socket.handshake.address,
+      query: socket.handshake.query,
+      headers: socket.handshake.headers,
+      auth: socket.handshake.auth,
+    },
+  });
 
   let playerName = "Anonymous"; // Default name
-  console.log(`Player connected: ${socket.id}`);
+
+  // Add more detailed query parameter handling
+  if (socket.handshake.query && socket.handshake.query.playerName) {
+    playerName = socket.handshake.query.playerName;
+    logWithTimestamp("Player", `Player name from query params: ${playerName}`);
+  } else {
+    logWithTimestamp(
+      "Player",
+      `No playerName in query, using default: ${playerName}`
+    );
+  }
+
   players[socket.id] = { name: playerName, currentRoomId: null };
-  console.log(`Player name: ${playerName}`);
+  logWithTimestamp("Player", `Player connected: ${socket.id} - ${playerName}`);
 
   socket.on("createRoom", () => {
     const roomId = `room_${Math.random().toString(36).substring(2, 7)}`;
@@ -1905,7 +2003,15 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", (reason) => {
+    logWithTimestamp("Disconnect", `Player disconnected: ${socket.id}`, {
+      reason: reason,
+      wasClean:
+        reason === "client namespace disconnect" ||
+        reason === "transport close",
+      playerData: players[socket.id],
+    });
+
     console.log(`Player disconnected: ${socket.id}`);
     const player = players[socket.id];
     if (player && player.currentRoomId) {
@@ -1973,6 +2079,14 @@ io.on("connection", (socket) => {
       }
     }
     delete players[socket.id];
+  });
+
+  // Log socket errors explicitly
+  socket.on("error", (err) => {
+    logWithTimestamp("Socket Error", `Error for socket ${socket.id}:`, {
+      message: err.message,
+      stack: err.stack,
+    });
   });
 });
 

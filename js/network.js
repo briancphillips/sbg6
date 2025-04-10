@@ -22,11 +22,26 @@ export function connect(playerName) {
   localPlayerName = playerName;
   console.log(`Attempting to connect as ${playerName}...`);
 
+  // Log important connection information
+  console.log(`Socket.IO connecting from: ${window.location.href}`);
+  console.log(
+    `Socket.IO default URL: ${window.location.protocol}//${window.location.host}`
+  );
+
   // Use actual Socket.IO connection
-  // Explicitly connect to the Socket.IO server on port 3000
-  socket = io("http://sorry.iggler.com:3000", {
+  socket = io({
     query: { playerName },
     reconnectionAttempts: 3,
+  });
+
+  // DEBUGGING: Uncomment the line below to specify an explicit connection URL
+  // socket = io('http://localhost:3000', { query: { playerName }, reconnectionAttempts: 3 });
+
+  // Add debug logging for Socket.IO client errors
+  socket.on("connect_error", (err) => {
+    console.error(`Socket.IO Connect Error: ${err.message}`);
+    if (err.description) console.error(`Description: ${err.description}`);
+    console.error(`Error Data:`, err);
   });
 
   setupListeners();
