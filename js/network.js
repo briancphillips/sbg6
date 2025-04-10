@@ -28,21 +28,47 @@ export function connect(playerName) {
     `Socket.IO default URL: ${window.location.protocol}//${window.location.host}`
   );
 
-  // Multi-strategy connection approach
   // Get the base URL (domain and port) without path
   const baseUrl = window.location.origin;
   console.log(`Base URL: ${baseUrl}`);
 
-  // In Docker with proxy setup, we use the same URL as the page
-  // The proxy will forward Socket.IO traffic to the Socket.IO server
-  console.log("Using proxy-based connection method");
+  // In production setup, connect through the same protocol
+  console.log("Using secure connection settings for production");
 
-  // When running in container with our proxy, we connect to the same origin
-  // and the proxy forwards the Socket.IO requests to port 3000
-  socket = io(baseUrl, {
+  // Create secure connection options that work in both HTTP and HTTPS environments
+  const connectionOptions = {
     query: { playerName },
-    reconnectionAttempts: 3,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    timeout: 20000, // 20 second timeout
     transports: ["polling", "websocket"], // Try polling first (more reliable through proxies)
+    upgrade: true, // Allow transport upgrade
+    rememberUpgrade: true, // Remember if websocket was successful
+    forceNew: true, // Ensure a new connection is established
+    secure: window.location.protocol === "https:", // Enable secure flag for HTTPS
+  };
+
+  // Log the connection options
+  console.log("Socket.IO connection options:", connectionOptions);
+
+  // Create the Socket.IO connection
+  socket = io(baseUrl, connectionOptions);
+
+  // Add detailed error logging
+  socket.io.on("error", (error) => {
+    console.error("Socket.IO Transport Error:", error);
+  });
+
+  socket.io.on("reconnect_attempt", (attempt) => {
+    console.log(`Socket.IO reconnection attempt #${attempt}`);
+  });
+
+  socket.io.on("reconnect_error", (error) => {
+    console.error("Socket.IO Reconnection Error:", error);
+  });
+
+  socket.io.on("reconnect_failed", () => {
+    console.error("Socket.IO failed to reconnect after all attempts");
   });
 
   // Add debug logging for Socket.IO client errors
