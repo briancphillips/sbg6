@@ -1,0 +1,8 @@
+.git
+.vscode
+node_modules
+js/server/node_modules
+*.md
+index_old.html
+
+# Optional: Add any other files/dirs you don't need in the container
