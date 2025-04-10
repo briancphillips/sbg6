@@ -593,6 +593,26 @@ export function drawPawns() {
       return; // Skip this iteration
     }
 
+    // Check if player has potentially non-standard format
+    if (
+      !Array.isArray(player.pawns) &&
+      player.name &&
+      typeof player.playerIndex === "number"
+    ) {
+      // Handle case of simplified player format from roomInfoUpdate
+      console.warn(
+        `[DrawPawns] Player ${playerIndex} has simplified format. Creating pawns array.`
+      );
+      player.pawns = Array(4)
+        .fill()
+        .map((_, pawnIdx) => ({
+          id: pawnIdx,
+          playerIndex: player.playerIndex || playerIndex,
+          positionType: "start",
+          positionIndex: -1,
+        }));
+    }
+
     // Ensure pawns is an array before trying to iterate
     if (!Array.isArray(player.pawns)) {
       console.error(

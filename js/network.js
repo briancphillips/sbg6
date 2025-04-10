@@ -32,10 +32,7 @@ export function connect(playerName) {
   const baseUrl = window.location.origin;
   console.log(`Base URL: ${baseUrl}`);
 
-  // For combined server, connect to same origin
-  console.log("Using combined server connection");
-
-  // Simple connection options, all in one server now
+  // Connection options - with detailed player name in query
   const connectionOptions = {
     query: { playerName },
     reconnectionAttempts: 5,
@@ -46,8 +43,16 @@ export function connect(playerName) {
   // Log the connection options
   console.log("Socket.IO connection options:", connectionOptions);
 
-  // Create the Socket.IO connection to same origin (combined server)
-  socket = io(baseUrl, connectionOptions);
+  // Create the Socket.IO connection - explicitly connect to the minimal server port
+  // Use minimal-server.js port which is 8083 instead of assuming same origin
+  const serverUrl =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+      ? `http://${window.location.hostname}:8083`
+      : baseUrl; // Fall back to same origin for production
+
+  console.log(`Connecting to Socket.IO server at: ${serverUrl}`);
+  socket = io(serverUrl, connectionOptions);
 
   // Add detailed error logging
   socket.io.on("error", (error) => {
@@ -328,39 +333,56 @@ function setupListeners() {
 }
 
 /**
- * Attempts to join an existing game room.
- * @param {string} roomCode - The code of the room to join.
- */
-export function joinRoom(roomCode) {
-  if (!socket || !isConnected) {
-    console.error("Cannot join room: Not connected.");
-    // Dispatch an error event maybe?
-    document.dispatchEvent(
-      new CustomEvent("serverError", {
-        detail: "Cannot join room: Not connected.",
-      })
-    );
-    return;
-  }
-  console.log(`Attempting to join room: ${roomCode}`);
-  socket.emit("joinRoom", roomCode);
-}
-
-/**
- * Attempts to create a new game room.
+ * Creates a new game room.
  */
 export function createRoom() {
-  if (!socket || !isConnected) {
-    console.error("Cannot create room: Not connected.");
-    document.dispatchEvent(
-      new CustomEvent("serverError", {
-        detail: "Cannot create room: Not connected.",
-      })
-    );
+  if (!isConnected || !socket) {
+    console.error("Cannot create room: Not connected to server");
     return;
   }
   console.log("Requesting to create a new room...");
   socket.emit("createRoom");
+}
+
+/**
+ * Joins an existing game room.
+ * @param {string} roomCode - The room code to join.
+ */
+export function joinRoom(roomCode) {
+  if (!isConnected || !socket) {
+    console.error("Cannot join room: Not connected to server");
+    return;
+  }
+  if (!roomCode || roomCode.trim() === "") {
+    console.error("Cannot join room: Invalid room code");
+    return;
+  }
+  console.log(`Requesting to join room: ${roomCode}`);
+  socket.emit("joinRoom", roomCode);
+}
+
+/**
+ * Starts the game in the current room.
+ */
+export function startGame() {
+  if (!isConnected || !socket) {
+    console.error("Cannot start game: Not connected to server");
+    return;
+  }
+  console.log("Requesting to start the game...");
+  socket.emit("startGame");
+}
+
+/**
+ * Draws a card from the deck.
+ */
+export function drawCard() {
+  if (!isConnected || !socket) {
+    console.error("Cannot draw card: Not connected to server");
+    return;
+  }
+  console.log("Requesting to draw a card...");
+  socket.emit("drawCard");
 }
 
 /**

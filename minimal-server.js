@@ -107,7 +107,20 @@ io.on("connection", (socket) => {
     socket.emit("roomCreated", {
       roomId: roomId,
       gameState: rooms[roomId].gameState,
-      players: [{ name: playerName, playerIndex: 0 }],
+      players: [
+        {
+          name: playerName,
+          playerIndex: 0,
+          pawns: Array(4)
+            .fill()
+            .map((_, pawnIndex) => ({
+              id: pawnIndex,
+              playerIndex: 0,
+              positionType: "start",
+              positionIndex: -1,
+            })),
+        },
+      ],
     });
 
     // Log the state that's being sent
@@ -185,6 +198,14 @@ io.on("connection", (socket) => {
       players: Object.values(rooms[roomCode].players).map((p) => ({
         name: p.name,
         playerIndex: p.playerIndex,
+        pawns: Array(4)
+          .fill()
+          .map((_, pawnIndex) => ({
+            id: pawnIndex,
+            playerIndex: p.playerIndex,
+            positionType: "start",
+            positionIndex: -1,
+          })),
       })),
     });
 
@@ -192,8 +213,17 @@ io.on("connection", (socket) => {
     io.to(roomCode).emit("roomInfoUpdate", {
       roomId: roomCode,
       players: Object.values(rooms[roomCode].players).map((p) => ({
-        name: p.name,
+        type: "human",
+        details: { name: p.name },
         playerIndex: p.playerIndex,
+        pawns: Array(4)
+          .fill()
+          .map((_, pawnIndex) => ({
+            id: pawnIndex,
+            playerIndex: p.playerIndex,
+            positionType: "start",
+            positionIndex: -1,
+          })),
       })),
     });
 
@@ -235,8 +265,17 @@ io.on("connection", (socket) => {
           io.to(roomId).emit("roomInfoUpdate", {
             roomId: roomId,
             players: Object.values(rooms[roomId].players).map((p) => ({
-              name: p.name,
+              type: "human",
+              details: { name: p.name },
               playerIndex: p.playerIndex,
+              pawns: Array(4)
+                .fill()
+                .map((_, pawnIndex) => ({
+                  id: pawnIndex,
+                  playerIndex: p.playerIndex,
+                  positionType: "start",
+                  positionIndex: -1,
+                })),
             })),
           });
 
