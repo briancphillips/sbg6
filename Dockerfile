@@ -26,6 +26,6 @@ EXPOSE 8083
 
 # Define command to run both the backend and frontend servers
 # - Runs the node server for Socket.IO
-# - Runs the simple proxy server
-CMD concurrently "node js/server/server.js" "node simple-proxy.js"
+# - Runs the minimal proxy server
+CMD concurrently "node js/server/server.js" "node minimal-proxy.js"
 
