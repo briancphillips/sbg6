@@ -577,8 +577,40 @@ export function drawBoard() {
 
 // Draw pawns
 export function drawPawns() {
-  gameState.players.forEach((player) => {
+  // Defensive check if players array exists
+  if (!Array.isArray(gameState.players)) {
+    console.error(
+      "[DrawPawns] gameState.players is not an array:",
+      gameState.players
+    );
+    return; // Exit early if players isn't an array
+  }
+
+  gameState.players.forEach((player, playerIndex) => {
+    // Defensive check if player and pawns array exists
+    if (!player) {
+      console.error(`[DrawPawns] Player at index ${playerIndex} is undefined`);
+      return; // Skip this iteration
+    }
+
+    // Ensure pawns is an array before trying to iterate
+    if (!Array.isArray(player.pawns)) {
+      console.error(
+        `[DrawPawns] player.pawns is not an array for player ${playerIndex}:`,
+        player
+      );
+      return; // Skip this player if pawns isn't an array
+    }
+
     player.pawns.forEach((pawn) => {
+      // Make sure pawn exists
+      if (!pawn) {
+        console.error(
+          `[DrawPawns] Found null/undefined pawn in player ${playerIndex}`
+        );
+        return; // Skip this pawn
+      }
+
       console.log(
         `[DrawPawns Debug] Processing Pawn ${pawn?.id} (Player ${pawn?.playerIndex}). State:`,
         pawn

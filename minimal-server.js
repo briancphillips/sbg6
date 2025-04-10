@@ -33,6 +33,44 @@ app.use(function (req, res) {
 const players = {}; // { socketId: { name: '', currentRoomId: '...' } }
 const rooms = {}; // { roomId: { gameState: {...}, players: {...} } }
 
+// Create a helper function to ensure a proper game state structure
+function createInitialGameState(roomId, creatorName) {
+  // Create properly structured players array with correct pawns
+  const initialPlayers = Array(4)
+    .fill()
+    .map((_, playerIndex) => {
+      const isCreator = playerIndex === 0;
+      return {
+        type: isCreator ? "human" : "empty",
+        details: {
+          name: isCreator ? creatorName : "Waiting...",
+        },
+        pawns: Array(4)
+          .fill()
+          .map((_, pawnIndex) => ({
+            id: pawnIndex,
+            playerIndex: playerIndex,
+            positionType: "start",
+            positionIndex: -1,
+          })),
+      };
+    });
+
+  return {
+    roomId: roomId,
+    gameStarted: false,
+    currentPlayerIndex: 0,
+    currentCard: null,
+    players: initialPlayers,
+    selectablePawns: [],
+    validMoves: [],
+    targetableOpponents: [],
+    message: `${creatorName}'s room. Waiting for players...`,
+    discardPile: [],
+    gameOver: false,
+  };
+}
+
 // Socket connection
 io.on("connection", (socket) => {
   console.log(`Client connected: ${socket.id}`);
@@ -51,71 +89,9 @@ io.on("connection", (socket) => {
     // Generate a room code
     const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
 
-    // Initialize player objects for the game state
-    const initialPlayers = [
-      {
-        type: "human",
-        details: { name: playerName },
-        pawns: Array(4)
-          .fill()
-          .map((_, i) => ({
-            id: i,
-            playerIndex: 0,
-            positionType: "start",
-            positionIndex: -1,
-          })),
-      },
-      {
-        type: "empty",
-        details: { name: "Waiting..." },
-        pawns: Array(4)
-          .fill()
-          .map((_, i) => ({
-            id: i,
-            playerIndex: 1,
-            positionType: "start",
-            positionIndex: -1,
-          })),
-      },
-      {
-        type: "empty",
-        details: { name: "Waiting..." },
-        pawns: Array(4)
-          .fill()
-          .map((_, i) => ({
-            id: i,
-            playerIndex: 2,
-            positionType: "start",
-            positionIndex: -1,
-          })),
-      },
-      {
-        type: "empty",
-        details: { name: "Waiting..." },
-        pawns: Array(4)
-          .fill()
-          .map((_, i) => ({
-            id: i,
-            playerIndex: 3,
-            positionType: "start",
-            positionIndex: -1,
-          })),
-      },
-    ];
-
-    // Create room with properly structured game state
+    // Create room with properly structured game state using helper function
     rooms[roomId] = {
-      gameState: {
-        roomId: roomId,
-        gameStarted: false,
-        currentPlayerIndex: 0,
-        currentCard: null,
-        players: initialPlayers,
-        selectablePawns: [],
-        validMoves: [],
-        targetableOpponents: [],
-        message: `${playerName}'s room. Waiting for players...`,
-      },
+      gameState: createInitialGameState(roomId, playerName),
       players: {},
     };
 
@@ -133,6 +109,12 @@ io.on("connection", (socket) => {
       gameState: rooms[roomId].gameState,
       players: [{ name: playerName, playerIndex: 0 }],
     });
+
+    // Log the state that's being sent
+    console.log(
+      "Room created with initial game state:",
+      JSON.stringify(rooms[roomId].gameState)
+    );
   });
 
   // Room joining
@@ -165,7 +147,35 @@ io.on("connection", (socket) => {
     if (rooms[roomCode].gameState.players[playerIndex]) {
       rooms[roomCode].gameState.players[playerIndex].type = "human";
       rooms[roomCode].gameState.players[playerIndex].details.name = playerName;
+
+      // Verify each player in the game state has a properly formed pawns array
+      for (let i = 0; i < rooms[roomCode].gameState.players.length; i++) {
+        const player = rooms[roomCode].gameState.players[i];
+        if (!player) {
+          console.error(`Player at index ${i} is not defined in game state!`);
+          continue;
+        }
+
+        // Make sure pawns array exists and is valid
+        if (!Array.isArray(player.pawns)) {
+          console.log(`Creating pawns array for player ${i}`);
+          player.pawns = Array(4)
+            .fill()
+            .map((_, pawnIndex) => ({
+              id: pawnIndex,
+              playerIndex: i,
+              positionType: "start",
+              positionIndex: -1,
+            }));
+        }
+      }
     }
+
+    // Log what's being sent
+    console.log(
+      `Sending game state to player ${socket.id}:`,
+      JSON.stringify(rooms[roomCode].gameState)
+    );
 
     // Emit join success
     socket.emit("room_joined", {
@@ -232,7 +242,7 @@ io.on("connection", (socket) => {
 
           // Send updated game state to all clients
           if (rooms[roomId]) {
-            io.to(roomId).emit("gameStateUpdate", rooms[roomId].gameState);
+            sendGameStateUpdate(roomId);
           }
         }
       }
@@ -257,7 +267,7 @@ io.on("connection", (socket) => {
       "Game started! Waiting for first player to draw a card.";
 
     // Send updated game state to all clients
-    io.to(roomId).emit("gameStateUpdate", rooms[roomId].gameState);
+    sendGameStateUpdate(roomId);
     io.to(roomId).emit("game_started", rooms[roomId].gameState);
 
     // Notify first player it's their turn
@@ -292,6 +302,9 @@ io.on("connection", (socket) => {
     rooms[roomId].gameState.currentCard = card;
     rooms[roomId].gameState.message = `Player ${playerIndex + 1} drew ${card}`;
 
+    // Send updated game state immediately
+    sendGameStateUpdate(roomId);
+
     // For simplicity in this minimal version, just move to the next player
     // In a real implementation, you'd handle the card actions
     setTimeout(() => {
@@ -304,7 +317,7 @@ io.on("connection", (socket) => {
       }'s turn to draw`;
 
       // Send updated game state
-      io.to(roomId).emit("gameStateUpdate", rooms[roomId].gameState);
+      sendGameStateUpdate(roomId);
 
       // Notify next player it's their turn
       const nextPlayerId = Object.keys(rooms[roomId].players).find(
@@ -316,10 +329,53 @@ io.on("connection", (socket) => {
         });
       }
     }, 2000); // Wait 2 seconds before moving to next player
-
-    // Send updated game state
-    io.to(roomId).emit("gameStateUpdate", rooms[roomId].gameState);
   });
+
+  // Handle all game state updates - ensure complete structure before sending
+  function sendGameStateUpdate(roomId) {
+    if (!rooms[roomId] || !rooms[roomId].gameState) return;
+
+    // Verify the game state has all required properties
+    const gameState = rooms[roomId].gameState;
+
+    // Ensure players array exists and has 4 entries
+    if (!Array.isArray(gameState.players) || gameState.players.length !== 4) {
+      console.error(
+        `Invalid players array in room ${roomId}:`,
+        gameState.players
+      );
+      gameState.players = createInitialGameState(roomId, "Player").players;
+    }
+
+    // Verify each player has a pawns array
+    for (let i = 0; i < gameState.players.length; i++) {
+      const player = gameState.players[i];
+      if (!player) {
+        console.error(`Player at index ${i} is not defined!`);
+        gameState.players[i] = {
+          type: "empty",
+          details: { name: "Empty" },
+          pawns: [],
+        };
+      }
+
+      // Ensure pawns array exists
+      if (!Array.isArray(player.pawns)) {
+        console.log(`Fixing missing pawns array for player ${i}`);
+        player.pawns = Array(4)
+          .fill()
+          .map((_, pawnIndex) => ({
+            id: pawnIndex,
+            playerIndex: i,
+            positionType: "start",
+            positionIndex: -1,
+          }));
+      }
+    }
+
+    // Now send the verified game state
+    io.to(roomId).emit("gameStateUpdate", gameState);
+  }
 });
 
 // Start server
