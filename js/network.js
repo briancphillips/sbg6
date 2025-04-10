@@ -23,7 +23,8 @@ export function connect(playerName) {
   console.log(`Attempting to connect as ${playerName}...`);
 
   // Use actual Socket.IO connection
-  socket = io({
+  // Explicitly connect to the Socket.IO server on port 3000
+  socket = io("http://sorry.iggler.com:3000", {
     query: { playerName },
     reconnectionAttempts: 3,
   });
