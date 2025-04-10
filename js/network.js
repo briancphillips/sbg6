@@ -9,8 +9,6 @@ let localPlayerId = null;
 let localPlayerIndex = -1;
 let assignedPlayerIndex = null;
 
-const SERVER_URL = "http://localhost:3000";
-
 /**
  * Connects to the Socket.IO server.
  * @param {string} playerName - The name chosen by the player.
@@ -22,10 +20,10 @@ export function connect(playerName) {
   }
 
   localPlayerName = playerName;
-  console.log(`Attempting to connect to ${SERVER_URL} as ${playerName}...`);
+  console.log(`Attempting to connect as ${playerName}...`);
 
   // Use actual Socket.IO connection
-  socket = io(SERVER_URL, {
+  socket = io({
     query: { playerName },
     reconnectionAttempts: 3,
   });
