@@ -623,7 +623,10 @@ export function drawPawns() {
           const highlightOutlineWidth = 5;
 
           // Highlight selectable pawns
-          if (gameState.selectablePawns?.includes(pawn.id)) {
+          if (
+            pawn.playerIndex === gameState.currentPlayerIndex &&
+            gameState.selectablePawns?.includes(pawn.id)
+          ) {
             drawCircle(
               coords.x,
               coords.y,
