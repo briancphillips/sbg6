@@ -5,4 +5,7 @@ js/server/node_modules
 *.md
 index_old.html
 
+# Add exception for the server's lock file
+!js/server/package-lock.json
+
 # Optional: Add any other files/dirs you don't need in the container

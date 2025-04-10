@@ -4,8 +4,8 @@ FROM node:18-alpine
 # Set the working directory in the container
 WORKDIR /app
 
-# Install backend dependencies first to leverage Docker cache
-COPY js/server/package.json js/server/package-lock.json ./js/server/
+# Copy server code and install backend dependencies
+COPY js/server ./js/server/
 RUN cd js/server && npm ci --omit=dev
 
 # Install global tools needed to run both servers
@@ -16,8 +16,10 @@ RUN npm install -g concurrently serve
 COPY . .
 
 # Make ports available to the world outside this container
-EXPOSE 3000 # For the Socket.IO server
-EXPOSE 8080 # For the frontend static server ('serve')
+# Port for the Socket.IO server
+EXPOSE 3000
+# Port for the frontend static server ('serve')
+EXPOSE 8080
 
 # Define command to run both the backend and frontend servers
 # - Runs the node server for Socket.IO
