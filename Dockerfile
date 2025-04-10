@@ -8,24 +8,16 @@ WORKDIR /app
 COPY js/server ./js/server/
 RUN cd js/server && npm install --omit=dev
 
-# Install global tools needed to run the servers
-RUN npm install -g concurrently
-
 # Copy the rest of the application source code into the container
 # (respecting .dockerignore)
 COPY . .
 
-# Install proxy dependencies locally
-RUN npm init -y && npm install express http-proxy-middleware
+# Install dependencies for the combined server
+RUN npm init -y && npm install express socket.io
 
-# Make ports available to the world outside this container
-# Port for the Socket.IO server
-EXPOSE 3000
-# Port for the frontend static server
+# Only expose the combined server port
 EXPOSE 8083
 
-# Define command to run both the backend and frontend servers
-# - Runs the node server for Socket.IO
-# - Runs the minimal proxy server
-CMD concurrently "node js/server/server.js" "node minimal-proxy.js"
+# Define command to run the combined server
+CMD ["node", "combined-server.js"]
 

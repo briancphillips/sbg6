@@ -32,26 +32,21 @@ export function connect(playerName) {
   const baseUrl = window.location.origin;
   console.log(`Base URL: ${baseUrl}`);
 
-  // In production setup, connect through the same protocol
-  console.log("Using secure connection settings for production");
+  // For combined server, connect to same origin
+  console.log("Using combined server connection");
 
-  // Create secure connection options that work in both HTTP and HTTPS environments
+  // Simple connection options, all in one server now
   const connectionOptions = {
     query: { playerName },
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
-    timeout: 20000, // 20 second timeout
-    transports: ["polling", "websocket"], // Try polling first (more reliable through proxies)
-    upgrade: true, // Allow transport upgrade
-    rememberUpgrade: true, // Remember if websocket was successful
-    forceNew: true, // Ensure a new connection is established
-    secure: window.location.protocol === "https:", // Enable secure flag for HTTPS
+    transports: ["polling", "websocket"],
   };
 
   // Log the connection options
   console.log("Socket.IO connection options:", connectionOptions);
 
-  // Create the Socket.IO connection
+  // Create the Socket.IO connection to same origin (combined server)
   socket = io(baseUrl, connectionOptions);
 
   // Add detailed error logging
