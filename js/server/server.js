@@ -1288,6 +1288,15 @@ io.on("connection", (socket) => {
           break;
         }
         const pawnIdToSelect = action.payload.pawnId;
+        // *** ADD LOGGING HERE ***
+        console.log(
+          `[Server] Received selectPawn. Action: ${room.gameState.currentAction}, ReqPawnID: ${pawnIdToSelect}`
+        );
+        console.log(
+          `[Server] Selectable Pawns: ${JSON.stringify(
+            room.gameState.selectablePawns
+          )}`
+        );
 
         // 2. Validate current game state allows pawn selection
         // This depends on the specific card/action flow, which determineActionsForCardServer sets.
@@ -1307,10 +1316,13 @@ io.on("connection", (socket) => {
         }
 
         // 3. Validate if the selected pawn ID is in the list of selectable pawns
-        if (
-          !room.gameState.selectablePawns ||
-          !room.gameState.selectablePawns.includes(pawnIdToSelect)
-        ) {
+        const isSelectable =
+          room.gameState.selectablePawns?.includes(pawnIdToSelect);
+        // *** ADD LOGGING HERE ***
+        console.log(
+          `[Server] Is Pawn ${pawnIdToSelect} selectable? ${isSelectable}`
+        );
+        if (!isSelectable) {
           socket.emit("gameError", `Pawn ${pawnIdToSelect} is not selectable.`);
           console.warn(
             `Selectable pawns were: ${room.gameState.selectablePawns?.join(
@@ -1507,6 +1519,21 @@ io.on("connection", (socket) => {
         }
         const moveDetails = action.payload.moveDetails; // { type, positionType, positionIndex, ...}
         const currentState = room.gameState.currentAction;
+        // *** ADD LOGGING HERE ***
+        console.log(
+          `[Server] Received selectMove. Action: ${currentState}, SelectedPawn: ${room.gameState.selectedPawn?.id}, ReqMove:`,
+          JSON.stringify(moveDetails)
+        );
+        console.log(
+          `[Server] Valid Moves: `,
+          JSON.stringify(
+            room.gameState.validMoves?.map((m) => ({
+              pT: m.positionType,
+              pI: m.positionIndex,
+              s: m.steps,
+            })) || []
+          )
+        );
 
         const allowedMoveStates = [
           "select-move",
@@ -1535,6 +1562,11 @@ io.on("connection", (socket) => {
             // For card 7, ensure the steps match if provided
             (moveDetails.steps === undefined ||
               validMove.steps === moveDetails.steps)
+        );
+
+        // *** ADD LOGGING HERE ***
+        console.log(
+          `[Server] Was move found in valid moves? ${!!serverValidMove}`
         );
 
         if (!serverValidMove) {
@@ -1765,10 +1797,65 @@ io.on("connection", (socket) => {
           `Player ${playerInfo.playerIndex} requested Sorry!`,
           action.payload
         );
-        // TODO: Validate Sorry! action (correct card, valid target, own pawn in start)
-        // TODO: Execute Sorry! (move pawns)
-        // TODO: Advance turn
-        stateChanged = true; // Placeholder
+        const sorryPayload = action.payload;
+        const playerPawn = room.gameState.selectedPawn; // Pawn from Start
+
+        // Basic Validation
+        if (room.gameState.currentCard !== "Sorry!") {
+          socket.emit("gameError", "Invalid action: Card is not Sorry!");
+          break;
+        }
+        if (!playerPawn || !isPawnAtStart(playerPawn)) {
+          socket.emit(
+            "gameError",
+            "Invalid action: No pawn selected or pawn not in Start."
+          );
+          break;
+        }
+        if (
+          !sorryPayload ||
+          sorryPayload.targetPawnId === undefined ||
+          sorryPayload.targetPlayerIndex === undefined
+        ) {
+          socket.emit("gameError", "Invalid Sorry! target payload.");
+          break;
+        }
+        // Basic check for targeting self
+        if (sorryPayload.targetPlayerIndex === playerInfo.playerIndex) {
+          socket.emit("gameError", "Cannot target your own pawn with Sorry!");
+          break;
+        }
+
+        const targetPawn = getPawnById(
+          room.gameState,
+          sorryPayload.targetPlayerIndex,
+          sorryPayload.targetPawnId
+        );
+
+        if (!targetPawn || !isPawnOnBoard(targetPawn)) {
+          socket.emit(
+            "gameError",
+            "Invalid Sorry! target: Pawn not found or not on board."
+          );
+          break;
+        }
+
+        // Execute Sorry! logic
+        const targetPositionIndex = targetPawn.positionIndex;
+        sendPawnToStartServer(targetPawn); // Send opponent home
+        playerPawn.positionType = "board"; // Move player pawn
+        playerPawn.positionIndex = targetPositionIndex;
+        console.log(
+          `[Server Sorry!] Moved Player ${playerInfo.playerIndex} Pawn ${playerPawn.id} to board ${targetPositionIndex}, sent Player ${targetPawn.playerIndex} Pawn ${targetPawn.id} to start.`
+        );
+
+        room.gameState.message = `Sorry! ${playerInfo.name} bumped ${
+          PLAYERS_SERVER[targetPawn.playerIndex].name
+        }!`;
+
+        // Advance the turn (this also resets state like selectedPawn, targets, etc.)
+        advanceTurnServer(room);
+        stateChanged = true;
         break;
 
       case "executeSwap":
@@ -1776,10 +1863,71 @@ io.on("connection", (socket) => {
           `Player ${playerInfo.playerIndex} requested Swap`,
           action.payload
         );
-        // TODO: Validate Swap action (correct card, valid pawns involved)
-        // TODO: Execute Swap (move pawns)
-        // TODO: Advance turn
-        stateChanged = true; // Placeholder
+        const swapPayload = action.payload;
+        const swapPlayerPawn = room.gameState.selectedPawn; // Use new name
+
+        // Basic Validation
+        if (room.gameState.currentCard !== "11") {
+          socket.emit("gameError", "Invalid action: Card is not 11.");
+          break;
+        }
+        if (!swapPlayerPawn || !isPawnOnBoard(swapPlayerPawn)) {
+          // Use new name
+          socket.emit(
+            "gameError",
+            "Invalid action: Player pawn for swap not selected or not on board."
+          );
+          break;
+        }
+        if (
+          !swapPayload ||
+          swapPayload.targetPawnId === undefined ||
+          swapPayload.targetPlayerIndex === undefined
+        ) {
+          socket.emit("gameError", "Invalid Swap target payload.");
+          break;
+        }
+        if (swapPayload.targetPlayerIndex === playerInfo.playerIndex) {
+          socket.emit("gameError", "Cannot swap with your own pawn.");
+          break;
+        }
+
+        const swapTargetPawn = getPawnById(
+          // Use new name
+          room.gameState,
+          swapPayload.targetPlayerIndex,
+          swapPayload.targetPawnId
+        );
+
+        if (!swapTargetPawn || !isPawnOnBoard(swapTargetPawn)) {
+          // Use new name
+          socket.emit(
+            "gameError",
+            "Invalid Swap target: Opponent pawn not found or not on board."
+          );
+          break;
+        }
+
+        // Execute Swap logic
+        const playerOriginalPos = swapPlayerPawn.positionIndex; // Use new name
+        const targetOriginalPos = swapTargetPawn.positionIndex; // Use new name
+
+        swapPlayerPawn.positionIndex = targetOriginalPos; // Use new name
+        swapTargetPawn.positionIndex = playerOriginalPos; // Use new name
+
+        console.log(
+          `[Server Swap] Swapped Player ${swapPlayerPawn.playerIndex} Pawn ${swapPlayerPawn.id} (to ${targetOriginalPos}) with Player ${swapTargetPawn.playerIndex} Pawn ${swapTargetPawn.id} (to ${playerOriginalPos})` // Use new names
+        );
+
+        room.gameState.message = `Swapped places with ${
+          PLAYERS_SERVER[swapTargetPawn.playerIndex].name
+        }!`; // Use new name
+
+        // TODO: Server-side slide/bump check after swap?
+
+        // Advance the turn (this also resets state)
+        advanceTurnServer(room);
+        stateChanged = true;
         break;
 
       case "skipTurn": // Handle the skip turn action added to client UI

@@ -249,12 +249,28 @@ function handleNextTurn() {
     return;
   }
 
-  // console.log(
-  //   "handleNextTurn triggered (Local). Current card:",
-  //   gameState.currentCard,
-  //   "Player:",
-  //   gameState.currentPlayerIndex
-  // );
+  // --- Local Mode Turn Advancement ---
+
+  // *** DEBUG: Check state of last moved pawn before drawing ***
+  if (typeof lastMovedPawnInfo !== "undefined" && lastMovedPawnInfo) {
+    console.log(
+      "[HandleNextTurn Debug] Checking last moved pawn:",
+      lastMovedPawnInfo
+    );
+    const pIndex = lastMovedPawnInfo.playerIndex;
+    const id = lastMovedPawnInfo.pawnId;
+    if (gameState.players[pIndex] && gameState.players[pIndex].pawns[id]) {
+      const pawnToCheck = gameState.players[pIndex].pawns[id];
+      console.log(
+        "[HandleNextTurn Debug] State of pawn BEFORE drawGame:",
+        pawnToCheck
+      );
+    } else {
+      console.error("[HandleNextTurn Debug] Could not find pawn in gameState!");
+    }
+    lastMovedPawnInfo = null; // Clear after checking
+  }
+  // **********************************************************
 
   // --- Discard the previous player's card ---
   if (gameState.currentCard) {

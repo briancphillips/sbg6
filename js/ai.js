@@ -1,5 +1,5 @@
 // AI Player Logic for Sorry!
-import { gameState } from "./gameState.js";
+import { gameState, getPawnObjectById } from "./gameState.js";
 import { PLAYERS } from "./constants.js";
 import {
   performDrawCard,
@@ -92,13 +92,24 @@ async function chooseAndExecuteAIAction(playerIndex) {
       case "select-7-pawn1":
       case "select-7-pawn2":
         if (gameState.selectablePawns.length > 0) {
-          const chosenPawn = gameState.selectablePawns[0];
-          console.log(
-            `AI (${playerName}) choosing Pawn ${chosenPawn.id} for state ${currentAction}`
-          );
-          await delay(AI_EXECUTION_DELAY); // Delay before pawn selection
-          executeLocalPawnSelection(playerIndex, chosenPawn);
-          actionExecuted = true;
+          // 1. Get the chosen pawn ID
+          const chosenPawnId = gameState.selectablePawns[0];
+          // 2. Get the actual pawn object using the ID
+          const chosenPawnObject = getPawnObjectById(playerIndex, chosenPawnId);
+
+          if (chosenPawnObject) {
+            console.log(
+              `AI (${playerName}) choosing Pawn ID ${chosenPawnId} for state ${currentAction}`
+            );
+            await delay(AI_EXECUTION_DELAY); // Delay before pawn selection
+            // 3. Pass the PAWN OBJECT to the selection function
+            executeLocalPawnSelection(playerIndex, chosenPawnObject);
+            actionExecuted = true;
+          } else {
+            console.error(
+              `AI (${playerName}) Error: Could not find pawn object for ID ${chosenPawnId}!`
+            );
+          }
         } else {
           console.error(
             `AI (${playerName}) Error: In state ${currentAction} but no selectable pawns!`
@@ -118,11 +129,12 @@ async function chooseAndExecuteAIAction(playerIndex) {
             chosenMove
           );
           await delay(AI_EXECUTION_DELAY); // Delay before move selection
-          performMoveSelection(playerIndex, chosenMove);
+          performMoveSelection(chosenMove); // Pass ONLY move
           actionExecuted = true;
         } else {
           console.error(
-            `AI (${playerName}) Error: In state ${currentAction} but no valid moves!`
+            `AI (${playerName}) Error: In state ${currentAction} but no valid moves! Current validMoves:`,
+            JSON.stringify(gameState.validMoves)
           );
         }
         break;

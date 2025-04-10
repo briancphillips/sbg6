@@ -30,6 +30,10 @@ import {
 import { drawGame } from "./drawing.js";
 import { updateUI } from "./ui.js";
 
+// *** TEMPORARY DEBUG GLOBAL ***
+let lastMovedPawnInfo = null;
+// ***************************
+
 // Helper function to check if a board position is occupied by an opponent's pawn
 function isOccupiedByOppPawnBoard(position, playerIndex) {
   // Get the pawn at this board position
@@ -848,7 +852,15 @@ export function checkForAnyValidAction(playerIndex, card) {
 // Execute a move for a pawn
 export function executeMove(pawn, destination, endTurnAfter = true) {
   const playerIndex = pawn.playerIndex;
+  const pawnId = pawn.id; // Capture ID
   let message = "";
+
+  // *** STORE INFO FOR DEBUGGING in handleNextTurn ***
+  console.log(
+    `[ExecuteMove] Storing last moved pawn: Player ${playerIndex}, ID ${pawnId}`
+  );
+  lastMovedPawnInfo = { playerIndex, pawnId };
+  // ************************************************
 
   // Safety check: Use helpers for destination type check
   if (isPawnOnBoard({ positionType: destination.positionType })) {

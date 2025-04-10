@@ -477,8 +477,12 @@ export function determineActionsForCard(playerIndex, card) {
     const opponentsOnBoard = getOpponentPawnsOnBoard(playerIndex);
 
     if (pawnsInStart.length > 0 && opponentsOnBoard.length > 0) {
-      gameState.selectablePawns = pawnsInStart;
-      gameState.targetableOpponents = opponentsOnBoard;
+      pawnsInStart.forEach((pawn) => {
+        // Add the ID, not the object
+        gameState.selectablePawns.push(pawn.id);
+      });
+      // Set targets
+      gameState.targetableOpponents = opponentsOnBoard.map((p) => p.id);
       console.log(
         `[TargetsSet] Sorry! - Set ${opponentsOnBoard.length} targetable opponents.`
       );
@@ -508,7 +512,7 @@ export function determineActionsForCard(playerIndex, card) {
         console.log(
           `[SelectableCheck] Card: ${card}, Player: ${playerIndex}, Adding Pawn ${pawn.id} (Pos: ${pawn.positionType} ${pawn.positionIndex})`
         );
-        gameState.selectablePawns.push(pawn);
+        gameState.selectablePawns.push(pawn.id);
       }
     });
 
@@ -517,7 +521,7 @@ export function determineActionsForCard(playerIndex, card) {
       gameState.message = "Draw 11: Select pawn to move 11 or swap.";
       // Need to provide targets for potential swap later
       if (canSwap) {
-        gameState.targetableOpponents = opponentsOnBoard;
+        gameState.targetableOpponents = opponentsOnBoard.map((p) => p.id);
         console.log(
           `[TargetsSet] Card 11 - Set ${opponentsOnBoard.length} targetable opponents.`
         );
@@ -545,7 +549,7 @@ export function determineActionsForCard(playerIndex, card) {
         console.log(
           `[SelectableCheck] Card: ${card}, Player: ${playerIndex}, Adding Pawn ${pawn.id} (Pos: ${pawn.positionType} ${pawn.positionIndex})`
         );
-        gameState.selectablePawns.push(pawn);
+        gameState.selectablePawns.push(pawn.id);
       }
     });
 
@@ -573,7 +577,7 @@ export function determineActionsForCard(playerIndex, card) {
           `[SelectableCheck] Card: ${card}, Player: ${playerIndex}, Adding Pawn ${pawn.id} (Pos: ${pawn.positionType} ${pawn.positionIndex}), Moves:`,
           moves
         );
-        gameState.selectablePawns.push(pawn);
+        gameState.selectablePawns.push(pawn.id);
       }
     });
 
@@ -634,8 +638,15 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
 
   // Determine next state based on the current action state
   switch (gameState.currentAction) {
-    case "select-pawn": // Standard cards (1, 2, 3, 4, 5, 8, 10, 12)
-      gameState.validMoves = getPossibleMovesForPawn(pawn, card);
+    case "select-pawn":
+      const standardMoves = getPossibleMovesForPawn(pawn, card);
+      // *** ADD LOGGING ***
+      console.log(
+        `[PawnSelect Debug] Moves calculated for ${pawn.id} (Card ${card}):`,
+        JSON.stringify(standardMoves)
+      );
+      // *******************
+      gameState.validMoves = standardMoves;
       nextAction = "select-move"; // Does NOT require targets
       gameState.message = `Selected Pawn ${pawn.id}. Choose a move.`;
       break;
@@ -645,8 +656,14 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
       gameState.message = `Selected Pawn ${pawn.id}. Choose opponent pawn to bump.`;
       break;
     case "select-11-pawn": // Pawn selected for card 11
-      // Calculate specific valid moves for THIS pawn.
-      gameState.validMoves = getPossibleMovesForPawn(pawn, "11");
+      const elevenMoves = getPossibleMovesForPawn(pawn, "11");
+      // *** ADD LOGGING ***
+      console.log(
+        `[PawnSelect Debug] Moves calculated for ${pawn.id} (Card 11):`,
+        JSON.stringify(elevenMoves)
+      );
+      // *******************
+      gameState.validMoves = elevenMoves;
       // Check if swap is possible *with this specific pawn* (must be on board)
       // Keep targetableOpponents check here, as they were set in determineActionsForCard
       const canSwapThisPawn =
@@ -683,7 +700,12 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
         );
         potentialMoves = potentialMoves.filter((move) => move.steps !== 7);
       }
-
+      // *** ADD LOGGING ***
+      console.log(
+        `[PawnSelect Debug] Moves calculated for ${pawn.id} (Card 7, Part 1):`,
+        JSON.stringify(potentialMoves)
+      );
+      // *******************
       gameState.validMoves = potentialMoves;
       nextAction = "select-7-move1"; // Does NOT require targets
       gameState.message = `Selected Pawn ${
@@ -696,10 +718,17 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
       gameState.splitData.secondPawn = pawn;
       // Calculate remaining moves for the second pawn
       const remainingValueForSecond = 7 - gameState.splitData.firstMoveValue;
-      gameState.validMoves = getPossibleMovesForPawn(
+      const secondSevenMoves = getPossibleMovesForPawn(
         pawn,
         remainingValueForSecond.toString()
       );
+      // *** ADD LOGGING ***
+      console.log(
+        `[PawnSelect Debug] Moves calculated for ${pawn.id} (Card 7, Part 2, ${remainingValueForSecond}):`,
+        JSON.stringify(secondSevenMoves)
+      );
+      // *******************
+      gameState.validMoves = secondSevenMoves;
       if (gameState.validMoves.length > 0) {
         nextAction = "select-7-move2"; // Does NOT require targets
         gameState.message = `Selected second Pawn ${pawn.id}. Choose its move.`;
@@ -726,7 +755,7 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
               remainingValueForSecond.toString()
             );
             if (secondMoves.length > 0) {
-              gameState.selectablePawns.push(otherPawn);
+              gameState.selectablePawns.push(otherPawn.id);
             }
           }
         });
@@ -786,6 +815,20 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
 export function performMoveSelection(move) {
   if (currentGameMode === "online") {
     if (gameState.currentPlayerIndex === localPlayerIndex) {
+      console.log(
+        `[UI->Net] Requesting selectMove. State: ${gameState.currentAction}, Move:`,
+        JSON.stringify(move)
+      );
+      console.log(
+        `[UI->Net] Valid Moves (Client):`,
+        JSON.stringify(
+          gameState.validMoves.map((m) => ({
+            pT: m.positionType,
+            pI: m.positionIndex,
+            s: m.steps,
+          }))
+        ) // Log key details
+      );
       requestMoveSelection(move);
       // Disable interaction until server responds
       canvas.classList.remove("clickable");
@@ -875,7 +918,7 @@ export function performMoveSelection(move) {
               //   }`
               // );
               if (secondMoves.length > 0) {
-                gameState.selectablePawns.push(pawn);
+                gameState.selectablePawns.push(pawn.id);
               }
             }
           });
@@ -946,7 +989,15 @@ function handleCanvasClick(event) {
   );
 
   // --- Online Mode Turn Check ---
-  if (currentGameMode === "online" && playerIndex !== localPlayerIndex) {
+  // *** ADD LOGGING HERE ***
+  console.log(
+    `[TurnCheck Debug] CurrentPlayerIndex: ${gameState.currentPlayerIndex}, LocalPlayerIndex: ${localPlayerIndex}`
+  );
+  // **************************
+  if (
+    currentGameMode === "online" &&
+    gameState.currentPlayerIndex !== localPlayerIndex
+  ) {
     console.log("Canvas clicked, but it's not your turn (Online).");
     return; // Ignore clicks if it's not the local player's turn online
   }
@@ -984,6 +1035,14 @@ function handleCanvasClick(event) {
         // console.log(`Clicked on Selectable Pawn: ${clickedPawn.id}`);
         // Call the correct function based on mode
         if (currentGameMode === "online") {
+          console.log(
+            `[UI->Net] Requesting selectPawn. State: ${gameState.currentAction}, PawnID: ${clickedPawn.id}`
+          );
+          console.log(
+            `[UI->Net] Selectable Pawns (Client): ${JSON.stringify(
+              gameState.selectablePawns
+            )}`
+          );
           requestSelectPawn(clickedPawn); // Send request online
           // Provide immediate visual feedback that selection was sent?
           if (canvas) canvas.style.cursor = "wait";
@@ -1039,18 +1098,69 @@ function handleCanvasClick(event) {
     case "select-7-move1":
     case "select-7-move2":
       clickedMove = isClickOnSquare(clickX, clickY, gameState.validMoves);
+      // *** ADD LOGGING HERE ***
+      console.log(`[CanvasClick Debug] State: ${gameState.currentAction}`);
+      console.log(
+        `[CanvasClick Debug] Valid Moves:`,
+        JSON.stringify(gameState.validMoves)
+      );
+      console.log(`[CanvasClick Debug] Clicked Move Result:`, clickedMove);
+      // *************************
       if (clickedMove) {
         // console.log("Clicked on Valid Move:", clickedMove);
-        performMoveSelection(playerIndex, clickedMove);
+        if (currentGameMode === "online") {
+          console.log(
+            `[UI->Net] Requesting selectMove. State: ${gameState.currentAction}, Move:`,
+            JSON.stringify(clickedMove)
+          );
+          console.log(
+            `[UI->Net] Valid Moves (Client):`,
+            JSON.stringify(
+              gameState.validMoves.map((m) => ({
+                pT: m.positionType,
+                pI: m.positionIndex,
+                s: m.steps,
+              }))
+            ) // Log key details
+          );
+        }
+        performMoveSelection(clickedMove);
         return;
       }
       break;
 
     case "select-11-action": // Can click move OR target
       clickedMove = isClickOnSquare(clickX, clickY, gameState.validMoves);
+      // *** ADD LOGGING HERE ***
+      console.log(`[CanvasClick Debug] State: ${gameState.currentAction}`);
+      console.log(
+        `[CanvasClick Debug] Valid Moves (for 11):`,
+        JSON.stringify(gameState.validMoves)
+      );
+      console.log(
+        `[CanvasClick Debug] Clicked Move Result (for 11):`,
+        clickedMove
+      );
+      // *************************
       if (clickedMove) {
         // console.log("Clicked on Valid Move (for 11):".clickedMove);
-        performMoveSelection(playerIndex, clickedMove);
+        if (currentGameMode === "online") {
+          console.log(
+            `[UI->Net] Requesting selectMove (for 11). State: ${gameState.currentAction}, Move:`,
+            JSON.stringify(clickedMove)
+          );
+          console.log(
+            `[UI->Net] Valid Moves (Client):`,
+            JSON.stringify(
+              gameState.validMoves.map((m) => ({
+                pT: m.positionType,
+                pI: m.positionIndex,
+                s: m.steps,
+              }))
+            ) // Log key details
+          );
+        }
+        performMoveSelection(clickedMove);
         return;
       }
       clickedTarget = isClickOnPawn(

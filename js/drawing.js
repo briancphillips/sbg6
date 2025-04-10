@@ -106,6 +106,8 @@ export function darkenColor(hex, percent) {
 
 // Get pixel coordinates for pawns
 export function getPixelCoordsForPawn(pawn) {
+  console.log(`[GetCoords Debug] Received pawn object:`, pawn);
+
   if (!pawn) return null;
 
   let coords = null;
@@ -210,6 +212,50 @@ export function isClickOnPawn(clickX, clickY, pawnsToCheck) {
   return null; // No pawn in the array was clicked
 }
 
+// Helper function to get pixel coordinates for a logical board/safe position
+function getPixelCoordsForBoardOrSafe(
+  positionType,
+  positionIndex,
+  playerIndex // Needed for safety zone lookups
+) {
+  console.log(
+    `[GetCoordsHelper Debug] Type: ${positionType}, Index: ${positionIndex}, Player: ${playerIndex}`
+  );
+  if (positionType === "board" || positionType === "entry") {
+    if (positionIndex >= 0 && positionIndex < BOARD_PATH.length) {
+      return {
+        x: BOARD_PATH[positionIndex].pixelX,
+        y: BOARD_PATH[positionIndex].pixelY,
+      };
+    } else {
+      console.warn(
+        `Invalid board index ${positionIndex} in getPixelCoordsForBoardOrSafe`
+      );
+      return null;
+    }
+  } else if (positionType === "safe") {
+    if (
+      playerIndex >= 0 &&
+      playerIndex < SAFETY_ZONES.length &&
+      positionIndex >= 0 &&
+      positionIndex < SAFETY_ZONES[playerIndex].length
+    ) {
+      const safeSq = SAFETY_ZONES[playerIndex][positionIndex];
+      return { x: safeSq.pixelX, y: safeSq.pixelY };
+    } else {
+      console.warn(
+        `Invalid safe zone lookup (Player: ${playerIndex}, Index: ${positionIndex}) in getPixelCoordsForBoardOrSafe`
+      );
+      return null;
+    }
+  } else {
+    console.warn(
+      `Invalid positionType ${positionType} in getPixelCoordsForBoardOrSafe`
+    );
+    return null;
+  }
+}
+
 // Check if a click hits one of the valid move squares
 // Returns the move object if hit, otherwise null
 export function isClickOnSquare(clickX, clickY, validMoves) {
@@ -223,12 +269,22 @@ export function isClickOnSquare(clickX, clickY, validMoves) {
   }
 
   for (const move of validMoves) {
-    // Check distance for this specific move's square coordinates
-    if (
-      distSq(clickX, clickY, move.pixelX, move.pixelY) <=
-      (SQUARE_SIZE / 2) * (SQUARE_SIZE / 2)
-    ) {
-      return move; // Return the specific move object that was clicked
+    // Calculate the target pixel coordinates for this move
+    // We need the current player's index for potential safety zone moves
+    const targetCoords = getPixelCoordsForBoardOrSafe(
+      move.positionType,
+      move.positionIndex,
+      gameState.currentPlayerIndex // Assuming moves are for the current player
+    );
+
+    if (targetCoords) {
+      // Check distance against the calculated coordinates
+      if (
+        distSq(clickX, clickY, targetCoords.x, targetCoords.y) <=
+        (SQUARE_SIZE / 2) * (SQUARE_SIZE / 2)
+      ) {
+        return move; // Return the specific move object that was clicked
+      }
     }
   }
   return null; // No valid move square was clicked
@@ -523,7 +579,18 @@ export function drawBoard() {
 export function drawPawns() {
   gameState.players.forEach((player) => {
     player.pawns.forEach((pawn) => {
+      console.log(
+        `[DrawPawns Debug] Processing Pawn ${pawn?.id} (Player ${pawn?.playerIndex}). State:`,
+        pawn
+      );
       const coords = getPixelCoordsForPawn(pawn);
+      if (!coords || coords.x <= -10) {
+        // Log the pawn object if getPixelCoordsForPawn fails or returns off-screen
+        console.error(
+          `[DrawFail] Failed to get valid coords for pawn. Pawn Object:`,
+          pawn
+        );
+      }
       if (coords && coords.x > -10) {
         // Get the correct color from the PLAYERS constant
         const color = PLAYERS[pawn.playerIndex].color;
@@ -556,7 +623,7 @@ export function drawPawns() {
           const highlightOutlineWidth = 5;
 
           // Highlight selectable pawns
-          if (gameState.selectablePawns.includes(pawn)) {
+          if (gameState.selectablePawns?.includes(pawn.id)) {
             drawCircle(
               coords.x,
               coords.y,
@@ -584,15 +651,14 @@ export function drawPawns() {
           }
 
           // Highlight targetable opponents
-          if (gameState.targetableOpponents.includes(pawn)) {
+          if (
+            pawn.playerIndex !== gameState.currentPlayerIndex &&
+            gameState.targetableOpponents?.includes(pawn.id)
+          ) {
             // Added log to confirm target highlighting
             console.log(
-              `[DrawingCheck] Highlighting Pawn ${pawn.id} (Player ${pawn.playerIndex}) as targetable. Targets array:`,
-              JSON.stringify(
-                gameState.targetableOpponents.map(
-                  (p) => `P${p.playerIndex}-${p.id}`
-                )
-              )
+              `[DrawingCheck] Highlighting Pawn ${pawn.id} (Player ${pawn.playerIndex}) as targetable. Targets array (IDs):`,
+              JSON.stringify(gameState.targetableOpponents)
             );
             drawCircle(
               coords.x,
@@ -608,10 +674,12 @@ export function drawPawns() {
           // Fallback to simpler drawing if gradient fails
           drawCircle(coords.x, coords.y, PAWN_RADIUS, color, "#000000", 1);
         }
-      } else if (coords.x <= -10) {
-        console.warn(
-          `Skipping drawing pawn ${pawn.id} due to off-screen coords.`
-        );
+      } else if (coords && coords.x <= -10) {
+        // Ensure we check coords exists before checking x
+        // Log already added above if coords failed
+        // console.warn(
+        //   `Skipping drawing pawn ${pawn.id} due to off-screen coords.`
+        // );
       }
     });
   });
@@ -626,10 +694,26 @@ export function drawHighlights() {
 
     gameState.validMoves.forEach((move) => {
       if (move.type === "move") {
-        ctx.beginPath();
-        ctx.arc(move.pixelX, move.pixelY, SQUARE_SIZE * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        // Calculate coords based on positionType/Index, like in isClickOnSquare
+        const targetCoords = getPixelCoordsForBoardOrSafe(
+          move.positionType,
+          move.positionIndex,
+          gameState.currentPlayerIndex
+        );
+
+        if (targetCoords) {
+          ctx.beginPath();
+          // Use calculated coords
+          ctx.arc(
+            targetCoords.x,
+            targetCoords.y,
+            SQUARE_SIZE * 0.4,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+          ctx.stroke();
+        }
       }
     });
   }
