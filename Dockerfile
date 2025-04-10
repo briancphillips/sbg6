@@ -8,12 +8,15 @@ WORKDIR /app
 COPY js/server ./js/server/
 RUN cd js/server && npm install --omit=dev
 
-# Install global tools needed to run both servers
-RUN npm install -g concurrently serve http-proxy-middleware
+# Install global tools needed to run the servers
+RUN npm install -g concurrently serve
 
 # Copy the rest of the application source code into the container
 # (respecting .dockerignore)
 COPY . .
+
+# Install proxy dependencies locally
+RUN npm init -y && npm install express http-proxy-middleware
 
 # Create a proxy.js file to forward Socket.IO requests
 RUN echo 'const { createProxyMiddleware } = require("http-proxy-middleware"); \
