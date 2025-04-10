@@ -33,23 +33,15 @@ export function connect(playerName) {
   const baseUrl = window.location.origin;
   console.log(`Base URL: ${baseUrl}`);
 
-  // Determine if we're running on localhost or not
-  const isLocalhost =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1" ||
-    window.location.hostname.includes("192.168.");
+  // In Docker with proxy setup, we use the same URL as the page
+  // The proxy will forward Socket.IO traffic to the Socket.IO server
+  console.log("Using proxy-based connection method");
 
-  console.log(`Is localhost: ${isLocalhost}`);
-
-  // Try to connect to Socket.IO server using path option for Docker compatibility
-  // This approach works with both scenarios:
-  // 1. Direct connection to port 3000
-  // 2. Connection through the static server with path forwarding
-  console.log("Using path-based connection method");
+  // When running in container with our proxy, we connect to the same origin
+  // and the proxy forwards the Socket.IO requests to port 3000
   socket = io(baseUrl, {
     query: { playerName },
     reconnectionAttempts: 3,
-    path: "/socket.io/", // Standard Socket.IO path
     transports: ["polling", "websocket"], // Try polling first (more reliable through proxies)
   });
 

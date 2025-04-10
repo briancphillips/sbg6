@@ -18,33 +18,6 @@ COPY . .
 # Install proxy dependencies locally
 RUN npm init -y && npm install express http-proxy-middleware
 
-# Create a proxy.js file to forward Socket.IO requests
-RUN echo 'const { createProxyMiddleware } = require("http-proxy-middleware"); \
-const express = require("express"); \
-const app = express(); \
-const path = require("path"); \
-\
-// Proxy all Socket.IO traffic to the Socket.IO server \
-app.use("/socket.io", createProxyMiddleware({ \
-  target: "http://localhost:3000", \
-  ws: true, \
-  changeOrigin: true, \
-  logLevel: "debug" \
-})); \
-\
-// Serve static files from current directory \
-app.use(express.static(".")); \
-\
-// Fallback to index.html for SPA routing \
-app.get("*", (req, res) => { \
-  res.sendFile(path.join(__dirname, "index.html")); \
-}); \
-\
-// Start Express server \
-app.listen(8083, "0.0.0.0", () => { \
-  console.log("Express server with proxy running on http://0.0.0.0:8083"); \
-});' > proxy.js
-
 # Make ports available to the world outside this container
 # Port for the Socket.IO server
 EXPOSE 3000
