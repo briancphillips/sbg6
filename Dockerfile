@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Copy server code and install backend dependencies
 COPY js/server ./js/server/
-RUN cd js/server && npm ci --omit=dev
+RUN cd js/server && npm install --omit=dev
 
 # Install global tools needed to run both servers
 RUN npm install -g concurrently serve
