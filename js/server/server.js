@@ -12,6 +12,21 @@ function logWithTimestamp(type, message, data = null) {
 // Enable Socket.IO debug logs - will output to console
 process.env.DEBUG = "socket.io:*";
 
+// Print network interfaces to help debug
+const os = require("os");
+const networkInterfaces = os.networkInterfaces();
+logWithTimestamp("Network", "Available network interfaces:");
+for (const [name, interfaces] of Object.entries(networkInterfaces)) {
+  for (const iface of interfaces) {
+    if (iface.family === "IPv4") {
+      logWithTimestamp(
+        "Network",
+        `Interface: ${name}, Address: ${iface.address}, Netmask: ${iface.netmask}`
+      );
+    }
+  }
+}
+
 // Create HTTP server and bind to all interfaces (0.0.0.0)
 const httpServer = http.createServer((req, res) => {
   // Add request logging to see incoming connections
@@ -24,6 +39,54 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Socket.IO test page to verify connectivity
+  if (req.url === "/socket-test") {
+    res.writeHead(200, { "Content-Type": "text/html" });
+    res.end(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Socket.IO Test</title>
+          <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+        </head>
+        <body>
+          <h1>Socket.IO Test Page</h1>
+          <div id="status">Connecting...</div>
+          <script>
+            document.getElementById('status').textContent = 'Attempting to connect...';
+            
+            // Log connection info
+            console.log('Page URL:', window.location.href);
+            console.log('Trying to connect to localhost:3000');
+            
+            // Direct connection to localhost:3000
+            const socket = io('http://localhost:3000', {
+              transports: ['websocket', 'polling'],
+              reconnectionAttempts: 3
+            });
+            
+            socket.on('connect', () => {
+              document.getElementById('status').textContent = 'Connected! Socket ID: ' + socket.id;
+              document.getElementById('status').style.color = 'green';
+            });
+            
+            socket.on('connect_error', (err) => {
+              document.getElementById('status').textContent = 'Connect Error: ' + err.message;
+              document.getElementById('status').style.color = 'red';
+              console.error('Connection Error:', err);
+            });
+            
+            socket.on('disconnect', (reason) => {
+              document.getElementById('status').textContent = 'Disconnected: ' + reason;
+              document.getElementById('status').style.color = 'orange';
+            });
+          </script>
+        </body>
+      </html>
+    `);
+    return;
+  }
+
   // For all other requests, return 404
   res.writeHead(404);
   res.end();
@@ -32,7 +95,7 @@ const httpServer = http.createServer((req, res) => {
 // Enhanced Socket.IO configuration with detailed logging
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", // Allow connections from any origin for simplicity (adjust for production)
+    origin: "*", // Allow connections from any origin
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -40,9 +103,11 @@ const io = new Server(httpServer, {
   connectTimeout: 45000, // Longer timeout for debugging (45s vs default 20s)
   pingTimeout: 30000, // Longer ping timeout
   pingInterval: 25000, // Longer ping interval
+  transports: ["polling", "websocket"], // Explicitly define transports
+  allowEIO3: true, // Allow Engine.IO v3 clients (for compatibility)
 });
 
-// Listen on all interfaces
+// Listen on multiple interfaces for better connectivity
 httpServer.listen(3000, "0.0.0.0", () => {
   logWithTimestamp("Server", "Socket.IO server listening on 0.0.0.0:3000");
 

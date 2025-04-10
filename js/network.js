@@ -28,14 +28,30 @@ export function connect(playerName) {
     `Socket.IO default URL: ${window.location.protocol}//${window.location.host}`
   );
 
-  // Use actual Socket.IO connection
-  socket = io(window.location.hostname + ":3000", {
+  // Multi-strategy connection approach
+  // Get the base URL (domain and port) without path
+  const baseUrl = window.location.origin;
+  console.log(`Base URL: ${baseUrl}`);
+
+  // Determine if we're running on localhost or not
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname.includes("192.168.");
+
+  console.log(`Is localhost: ${isLocalhost}`);
+
+  // Try to connect to Socket.IO server using path option for Docker compatibility
+  // This approach works with both scenarios:
+  // 1. Direct connection to port 3000
+  // 2. Connection through the static server with path forwarding
+  console.log("Using path-based connection method");
+  socket = io(baseUrl, {
     query: { playerName },
     reconnectionAttempts: 3,
+    path: "/socket.io/", // Standard Socket.IO path
+    transports: ["polling", "websocket"], // Try polling first (more reliable through proxies)
   });
-
-  // DEBUGGING: Uncomment the line below to specify an explicit connection URL
-  // socket = io('http://localhost:3000', { query: { playerName }, reconnectionAttempts: 3 });
 
   // Add debug logging for Socket.IO client errors
   socket.on("connect_error", (err) => {

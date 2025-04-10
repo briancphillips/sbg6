@@ -1,16 +1,17 @@
 {
-  "name": "server",
+  "name": "sorry-server",
   "version": "1.0.0",
+  "description": "Server for the Sorry! game",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "socket.io": "^4.8.1"
-  },
-  "description": ""
+    "socket.io": "^4.8.1",
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6"
+  }
 }
