@@ -29,7 +29,7 @@ export function connect(playerName) {
   );
 
   // Use actual Socket.IO connection
-  socket = io({
+  socket = io(window.location.hostname + ":3000", {
     query: { playerName },
     reconnectionAttempts: 3,
   });
