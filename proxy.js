@@ -19,8 +19,9 @@ app.use(
 // Serve static files from current directory
 app.use(express.static("."));
 
-// Fallback to index.html for SPA routing
-app.get("*", (req, res) => {
+// Fallback to index.html for SPA routing - use a simple string path
+// The previous version might have had a malformed path pattern
+app.get("*", function (req, res) {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 

@@ -9,7 +9,7 @@ COPY js/server ./js/server/
 RUN cd js/server && npm install --omit=dev
 
 # Install global tools needed to run the servers
-RUN npm install -g concurrently serve
+RUN npm install -g concurrently
 
 # Copy the rest of the application source code into the container
 # (respecting .dockerignore)
@@ -21,11 +21,11 @@ RUN npm init -y && npm install express http-proxy-middleware
 # Make ports available to the world outside this container
 # Port for the Socket.IO server
 EXPOSE 3000
-# Port for the frontend static server ('serve')
+# Port for the frontend static server
 EXPOSE 8083
 
 # Define command to run both the backend and frontend servers
 # - Runs the node server for Socket.IO
-# - Runs Express proxy server for the static files including Socket.IO forwarding
-CMD concurrently "node js/server/server.js" "node proxy.js"
+# - Runs the simple proxy server
+CMD concurrently "node js/server/server.js" "node simple-proxy.js"
 
