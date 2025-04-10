@@ -1,6 +1,6 @@
 // server.js (Conceptual Example)
 const { Server } = require("socket.io");
-const http = require('http');
+const http = require("http");
 
 // Create HTTP server and bind to all interfaces (0.0.0.0)
 const httpServer = http.createServer();
@@ -11,9 +11,15 @@ const io = new Server(httpServer, {
 });
 
 // Listen on all interfaces
-httpServer.listen(3000, '0.0.0.0', () => {
-  console.log('Socket.IO server listening on 0.0.0.0:3000');
+httpServer.listen(3000, "0.0.0.0", () => {
+  console.log("[Server Startup] Socket.IO server listening on 0.0.0.0:3000");
 });
+
+// *** Add HTTP Server Error Logging ***
+httpServer.on("error", (err) => {
+  console.error("[HTTP Server Error]", err);
+});
+// ************************************
 
 let rooms = {}; // { roomId: { gameState: {...}, players: { socketId: { name: '', playerIndex: X, pawns: [...] } }, playerOrder: [socketId,...], ... } }
 let players = {}; // { socketId: { name: '', currentRoomId: '...' } }
@@ -674,11 +680,8 @@ function determineActionsForCardServer(roomGameState, playerIndex, card) {
       let canMoveAnySplit = false;
       for (let i = 1; i <= 7; i++) {
         if (
-          getPossibleMovesForPawnServer(
-            roomGameState,
-            pawn,
-            i.toString()
-          ).length > 0
+          getPossibleMovesForPawnServer(roomGameState, pawn, i.toString())
+            .length > 0
         ) {
           canMoveAnySplit = true;
           break;
@@ -974,9 +977,16 @@ function initializeGameStateServerVersion(roomId) {
 
 // --- Socket.IO Event Handlers ---
 
+// --- Main Connection Handler ---
+console.log("[Server Init] Setting up connection handler..."); // Log before handler setup
+
 io.on("connection", (socket) => {
+  // *** Add Connection Attempt Logging ***
+  console.log(`[Connection] Attempt received. Socket ID: ${socket.id}`);
+  // ************************************
+
+  let playerName = "Anonymous"; // Default name
   console.log(`Player connected: ${socket.id}`);
-  const playerName = socket.handshake.query.playerName || "Anonymous";
   players[socket.id] = { name: playerName, currentRoomId: null };
   console.log(`Player name: ${playerName}`);
 
