@@ -154,18 +154,21 @@ function setupListeners() {
 
   // --- Lobby/Room Listeners ---
   socket.on("assignPlayerData", (data) => {
-    console.log("Received player assignment from server:", data);
-    localPlayerId = data.playerId;
-    localPlayerIndex = data.playerIndex;
-    window.localPlayerIndex = data.playerIndex; // Update global reference
-    console.log(
-      `Setting localPlayerIndex to ${data.playerIndex} (0 means host)`
-    );
-    document.dispatchEvent(
-      new CustomEvent("assignPlayer", {
-        detail: { id: localPlayerId, index: localPlayerIndex },
-      })
-    );
+    if (data && data.playerIndex !== undefined) {
+      localPlayerId = data.playerId; // Store socket ID too
+      localPlayerIndex = data.playerIndex;
+      console.log(
+        `[Network] Player data assigned: ID=${localPlayerId}, Index=${localPlayerIndex}`
+      );
+      // Optionally, trigger an immediate UI update or state sync
+      document.dispatchEvent(
+        new CustomEvent("playerDataAssigned", {
+          detail: { index: localPlayerIndex },
+        })
+      );
+    } else {
+      console.error("[Network] Received invalid assignPlayerData:", data);
+    }
   });
 
   socket.on("roomJoined", (data) => {
