@@ -1316,18 +1316,94 @@ io.on("connection", (socket) => {
     }
 
     const room = rooms[roomId];
-    const playerInfo = room.players[socket.id]; // Player info { name, playerIndex }
+    if (socket.id !== room.hostSocketId) {
+      console.warn(
+        `Non-host ${socket.id} tried to start game in room ${roomId}`
+      );
+      socket.emit("gameError", "Only the host can start the game.");
+      return;
+    }
+
+    if (room.gameState.gameStarted) {
+      console.log(`Game already started in room ${roomId}`);
+      socket.emit("gameError", "Game has already started.");
+      return;
+    }
+
+    const numPlayers = room.playerOrder.length;
+    if (numPlayers < 2) {
+      // Require at least 2 players (adjust if needed)
+      console.log(`Room ${roomId} needs at least 2 players to start.`);
+      socket.emit("gameError", "Need at least 2 players to start.");
+      return;
+    }
+
+    console.log(`Starting game in room ${roomId} by host ${socket.id}`);
+
+    // --- Initialize Game ---
+    room.gameState.gameStarted = true;
+    room.gameState.deck = createDeckServer();
+    shuffleDeckServer(room.gameState.deck);
+    room.gameState.currentPlayerIndex = 0; // Player 0 (host) starts
+    resetTurnStateServer(room.gameState); // Clear any stale state
+    room.gameState.message = `${room.gameState.players[0].name}'s turn. Draw a card.`;
+    const firstPlayerSocketId = room.playerOrder[0];
+
+    // --- Broadcast Game Started and Initial Turn ---
+    io.to(roomId).emit("gameStarted", room.gameState); // Send full initial state
+    // Emit 'yourTurn' specifically to the first player
+    if (firstPlayerSocketId) {
+      io.to(firstPlayerSocketId).emit("yourTurn", {
+        currentPlayerIndex: 0,
+      });
+      console.log(
+        `[ServerStart] Emitted 'yourTurn' to first player ${firstPlayerSocketId}`
+      );
+    } else {
+      console.error(
+        `[ServerStart] Could not find socket ID for first player (index 0) in room ${roomId}`
+      );
+    }
+
+    console.log(`Game started in room ${roomId}. Player 0's turn.`);
+  });
+
+  // --- Player Action Listener ---
+  socket.on("playerAction", (action) => {
+    // Extract necessary info (roomId, playerIndex) from the incoming action data
+    // or look it up based on socket.id
+    const roomId = action.roomId || players[socket.id]?.currentRoomId; // Get roomId from action or player data
+    const playerSocketId = socket.id;
+
+    // --- Basic Validation ---
+    if (!roomId || !rooms[roomId]) {
+      console.error(
+        `Received action from ${playerSocketId} with invalid/missing room ID: ${roomId}`
+      );
+      socket.emit("gameError", "Invalid room context for action.");
+      return;
+    }
+
+    const room = rooms[roomId];
+    const playerInfo = room.players[playerSocketId]; // Player info { name, playerIndex }
 
     if (!playerInfo) {
-      console.error(`Player info not found for ${socket.id} in room ${roomId}`);
+      console.error(
+        `Player info not found for ${playerSocketId} in room ${roomId} during action: ${action.actionType}`
+      );
       socket.emit("gameError", "Internal server error (player not found).");
       return;
     }
 
+    // Log the received action clearly
+    console.log(
+      `[ServerAction] Received action from ${playerInfo.name} (Player ${playerInfo.playerIndex}) in room ${roomId}: ${action.actionType}`
+    );
+
     // --- Action Validation ---
     // 1. Check if game has started
-    if (room.gameState.gameStarted) {
-      socket.emit("gameError", "Game has already started.");
+    if (!room.gameState.gameStarted) {
+      socket.emit("gameError", "Game has not started yet.");
       return;
     }
     // 2. Check if it's the player's turn
@@ -1336,9 +1412,8 @@ io.on("connection", (socket) => {
       return;
     }
 
-    console.log(
-      `Received action from ${playerName} (Player ${playerInfo.playerIndex}) in room ${roomId}: ${action.actionType}`
-    );
+    // Log after validation passes
+    console.log(` > Action validated for player ${playerInfo.playerIndex}`);
 
     // --- Handle Specific Actions ---
     let stateChanged = false; // Flag to track if gameState was modified
@@ -1375,6 +1450,11 @@ io.on("connection", (socket) => {
             console.log(
               `[ServerTurn] Auto-skipping turn for Player ${playerInfo.playerIndex} as no actions are possible with card ${room.gameState.currentCard}.`
             );
+            // Ensure card is discarded if turn skipped
+            if (room.gameState.currentCard) {
+              room.gameState.discardPile.push(room.gameState.currentCard);
+              room.gameState.currentCard = null; // Clear card before advancing
+            }
             advanceTurnServer(room); // This resets state and emits yourTurn
           }
           // ---------------------------------------
@@ -1834,6 +1914,12 @@ io.on("connection", (socket) => {
             break; // Exit switch case
           }
 
+          // Discard card after first part of 7 is done (or if 7 was used whole)
+          if (room.gameState.currentCard) {
+            room.gameState.discardPile.push(room.gameState.currentCard);
+            room.gameState.currentCard = null; // Card is now used
+          }
+
           const remainingValue = 7 - moveValue;
           if (remainingValue > 0) {
             // Need to select second pawn
@@ -1886,6 +1972,11 @@ io.on("connection", (socket) => {
           room.gameState.message = `Completed 7-split move.`;
         } else {
           // Default case: Standard move, 11-move completed. End turn.
+          // Discard card after move is complete
+          if (room.gameState.currentCard) {
+            room.gameState.discardPile.push(room.gameState.currentCard);
+            room.gameState.currentCard = null; // Card is now used
+          }
           advanceTurnServer(room);
           turnEndedByMove = true;
           stateChanged = true;
@@ -1967,6 +2058,12 @@ io.on("connection", (socket) => {
           PLAYERS_SERVER[targetPawn.playerIndex].name
         }!`;
 
+        // Discard card
+        if (room.gameState.currentCard === "Sorry!") {
+          room.gameState.discardPile.push(room.gameState.currentCard);
+          room.gameState.currentCard = null;
+        }
+
         // Advance the turn (this also resets state like selectedPawn, targets, etc.)
         advanceTurnServer(room);
         stateChanged = true;
@@ -2039,6 +2136,12 @@ io.on("connection", (socket) => {
 
         // TODO: Server-side slide/bump check after swap?
 
+        // Discard card
+        if (room.gameState.currentCard === "11") {
+          room.gameState.discardPile.push(room.gameState.currentCard);
+          room.gameState.currentCard = null;
+        }
+
         // Advance the turn (this also resets state)
         advanceTurnServer(room);
         stateChanged = true;
@@ -2046,9 +2149,21 @@ io.on("connection", (socket) => {
 
       case "skipTurn": // Handle the skip turn action added to client UI
         console.log(`Player ${playerInfo.playerIndex} requested skipTurn.`);
-        // TODO: Validate if skipping is allowed (e.g., only if no moves possible?)
-        // TODO: Advance turn
-        stateChanged = true; // Placeholder
+        // Basic validation: Can only skip if a card has been drawn AND no moves are possible
+        // OR if skipping a specific action (like choosing not to split 7 when optional)
+        // For now, simple implementation: just advance turn if card was drawn
+        if (room.gameState.currentCard !== null) {
+          console.log(
+            `[ServerTurn] Player ${playerInfo.playerIndex} is skipping turn with card ${room.gameState.currentCard}.`
+          );
+          // Discard the card before advancing
+          room.gameState.discardPile.push(room.gameState.currentCard);
+          room.gameState.currentCard = null; // Clear card before advancing
+          advanceTurnServer(room);
+          stateChanged = true;
+        } else {
+          socket.emit("gameError", "Cannot skip turn: No card drawn yet.");
+        }
         break;
 
       default:
@@ -2063,8 +2178,7 @@ io.on("connection", (socket) => {
       io.to(roomId).emit("gameStateUpdate", room.gameState);
       console.log(`Room ${roomId}: Broadcasted updated gameState.`);
 
-      // TODO: Determine if turn should end and emit 'yourTurn' to the next player
-      // This logic depends heavily on the action performed (move, skip, etc.)
+      // Note: 'yourTurn' emission is handled within advanceTurnServer now
     }
   });
 
