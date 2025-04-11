@@ -160,7 +160,7 @@ function setupListeners() {
     );
   });
 
-  socket.on("room_joined", (data) => {
+  socket.on("roomJoined", (data) => {
     console.log("Room joined/created:", data);
     // data should include { roomId, players, initialGameState, yourPlayerIndex }
     if (data.error) {
@@ -270,8 +270,8 @@ function setupListeners() {
   });
 
   // Listen for the game starting (triggered by host)
-  socket.on("game_started", (initialGameState) => {
-    console.log("Received game_started event", initialGameState);
+  socket.on("gameStarted", (initialGameState) => {
+    console.log("Received gameStarted event", initialGameState);
     gameState.gameStarted = true;
     // Update state if provided (might be the same as initial join state)
     if (initialGameState) {
@@ -418,8 +418,8 @@ export function emitAction(actionType, payload = {}) {
 // Function for the host to request starting the game
 export function requestStartGame() {
   if (socket && socket.connected) {
-    console.log(`Emitting 'start_game' for room: ${gameState.roomId}`);
-    socket.emit("start_game", { roomId: gameState.roomId });
+    console.log(`Emitting 'startGame' for room: ${gameState.roomId}`);
+    socket.emit("startGame", { roomId: gameState.roomId });
   } else {
     console.error("Cannot start game: Socket not connected.");
   }
