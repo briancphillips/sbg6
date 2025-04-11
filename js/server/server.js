@@ -1191,8 +1191,11 @@ io.on("connection", (socket) => {
     console.log(
       `[Server] Emitting assignPlayerData to creator ${socket.id}:`,
       playerDataPayload
-    ); // <<< ADD LOG
+    );
     socket.emit("assignPlayerData", playerDataPayload);
+    console.log(
+      `[Server] FINISHED emitting assignPlayerData to creator ${socket.id}`
+    ); // <<< ADDED LOG
 
     // Send initial room/game state back to creator
     // Send only the players part of the gameState initially
@@ -1288,8 +1291,11 @@ io.on("connection", (socket) => {
     console.log(
       `[Server] Emitting assignPlayerData to joiner ${socket.id}:`,
       playerDataPayloadJoin
-    ); // <<< ADD LOG
+    );
     socket.emit("assignPlayerData", playerDataPayloadJoin);
+    console.log(
+      `[Server] FINISHED emitting assignPlayerData to joiner ${socket.id}`
+    ); // <<< ADDED LOG
 
     // Send current room/game state to joining player
     const roomDataForClient = {
