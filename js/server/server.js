@@ -301,6 +301,10 @@ function sendPawnToStartServer(pawn) {
   );
   pawn.positionType = "start";
   pawn.positionIndex = -1;
+  console.log(
+    `[ServerAction] Pawn ${pawn.id} state after bump:`,
+    JSON.stringify(pawn)
+  ); // <<< ADD LOG
 }
 
 // Get opponent pawns currently on the main board track
@@ -876,6 +880,9 @@ function advanceTurnServer(room) {
     );
     return;
   }
+  console.log(
+    `[ServerTurn] Attempting to advance turn from player ${room.gameState.currentPlayerIndex}`
+  ); // <<< ADD LOG
 
   const gameState = room.gameState;
   // Use playerOrder which should only contain socket IDs of currently connected players
@@ -960,6 +967,9 @@ function advanceTurnServer(room) {
       `[ServerTurn] Cannot emit 'yourTurn': Socket ID missing for player ${nextPlayerIndex}`
     );
   }
+  console.log(
+    `[ServerTurn] Finished advancing turn. New player is ${gameState.currentPlayerIndex}`
+  ); // <<< ADD LOG
 }
 
 // --- Server-Side Card Logic (Adapted from client) ---

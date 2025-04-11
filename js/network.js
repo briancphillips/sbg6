@@ -173,43 +173,44 @@ function setupListeners() {
   });
 
   socket.on("roomJoined", (data) => {
-    console.log("Room joined/created:", data);
-    console.log(`Room joined with yourPlayerIndex=${data.yourPlayerIndex}`);
-    // data should include { roomId, players, initialGameState, yourPlayerIndex }
-    if (data.error) {
-      console.error("Room join/create error:", data.error);
-      // TODO: Display error to user on the setup screen
-      return;
-    }
-
-    // Initial game state update from server
-    if (data.initialGameState) {
-      Object.assign(gameState, data.initialGameState);
-      console.log("Local gameState updated from server.");
+    if (data && data.roomId) {
+      console.log(`[Network] Successfully joined room:`, data);
+      // Update local state based on server data
+      if (data.initialGameState) {
+        // Ensure room ID is preserved if server state doesn't include it
+        const currentRoomId = gameState.roomId;
+        Object.assign(gameState, data.initialGameState);
+        if (!gameState.roomId && currentRoomId) {
+          gameState.roomId = currentRoomId;
+        }
+        console.log("Local gameState updated from server.");
+        document.dispatchEvent(
+          new CustomEvent("gameStateUpdate", {
+            detail: { state: data.initialGameState },
+          })
+        );
+      }
+      gameState.roomId = data.roomId; // Set Room ID
+      // Explicitly set players array after Object.assign
+      if (data.players) {
+        gameState.players = data.players;
+      }
+      console.log(
+        `Assigned player index: ${data.yourPlayerIndex}, Room ID: ${data.roomId}`
+      );
+      // Dispatch event for UI to potentially update player list, etc.
       document.dispatchEvent(
-        new CustomEvent("gameStateUpdate", {
-          detail: { state: data.initialGameState },
+        new CustomEvent("roomUpdate", {
+          detail: {
+            roomId: data.roomId,
+            players: data.players,
+            playerIndex: localPlayerIndex,
+          },
         })
       );
+    } else {
+      console.error("[Network] Received invalid roomJoined data:", data);
     }
-    gameState.roomId = data.roomId; // Set Room ID
-    // Explicitly set players array after Object.assign
-    if (data.players) {
-      gameState.players = data.players;
-    }
-    console.log(
-      `Assigned player index: ${data.yourPlayerIndex}, Room ID: ${data.roomId}`
-    );
-    // Dispatch event for UI to potentially update player list, etc.
-    document.dispatchEvent(
-      new CustomEvent("roomUpdate", {
-        detail: {
-          roomId: data.roomId,
-          players: data.players,
-          playerIndex: localPlayerIndex,
-        },
-      })
-    );
   });
 
   socket.on("joinFailed", (message) => {
@@ -287,7 +288,7 @@ function setupListeners() {
 
   // Listen for the game starting (triggered by host)
   socket.on("gameStarted", (initialGameState) => {
-    console.log("Received gameStarted event", initialGameState);
+    console.log("[Network] Received gameStarted event:", initialGameState);
     gameState.gameStarted = true;
     // Update state if provided (might be the same as initial join state)
     if (initialGameState) {
