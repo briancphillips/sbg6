@@ -332,7 +332,7 @@ function handleModeChange() {
     startGameButton.textContent = "Start Local Game"; // Ensure correct text
     // Disable online buttons if they exist
     if (joinRoomButton) joinRoomButton.classList.add("hidden");
-    if (createRoomButton) createRoomButton.classList.add("hidden");
+    if (createRoomButton) createRoomButton.disabled = true;
   } else {
     // Online mode selected
     localPlayerSetup.classList.add("hidden");
@@ -340,7 +340,7 @@ function handleModeChange() {
     startGameButton.classList.add("hidden"); // Hide Start Local Game button
     // Ensure online buttons are visible
     if (joinRoomButton) joinRoomButton.classList.remove("hidden");
-    if (createRoomButton) createRoomButton.classList.remove("hidden");
+    if (createRoomButton) createRoomButton.disabled = false;
   }
 }
 
@@ -390,6 +390,53 @@ function handleScenarioLoad(event) {
     // Optionally show an error to the user
   }
 }
+
+// Add this function to check and force-show the start game button if needed
+function forceStartGameButton() {
+  const startButton = document.getElementById("startGameOnlineButton");
+  if (startButton) {
+    console.log("[MAIN] Force-showing start game button");
+    console.log(`[MAIN] Current localPlayerIndex: ${window.localPlayerIndex}`);
+
+    startButton.classList.remove("hidden");
+    startButton.disabled = false;
+    startButton.textContent = "Start Online Game";
+    startButton.style.display = "block"; // Make sure it's visible
+
+    // Re-add the event listener
+    startButton.addEventListener("click", () => {
+      console.log("[MAIN] Start Game button clicked from forced button");
+      requestStartGame();
+      startButton.disabled = true;
+      startButton.textContent = "Starting...";
+    });
+  } else {
+    console.error("[MAIN] Could not find startGameOnlineButton element!");
+  }
+}
+
+// Add function to manually set the local player as host
+function createHost() {
+  console.log("[MAIN] Setting local player as host (index 0)");
+  window.localPlayerIndex = 0;
+
+  // Update the UI to reflect host status
+  document.dispatchEvent(
+    new CustomEvent("assignPlayer", {
+      detail: { index: 0 },
+    })
+  );
+
+  // Show the start game button
+  forceStartGameButton();
+
+  console.log("[MAIN] Local player is now the host with index 0");
+  return "You are now the host!";
+}
+
+// Make the functions globally available for debugging
+window.forceStartGameButton = forceStartGameButton;
+window.createHost = createHost;
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", () => {
@@ -510,6 +557,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Add listener for network status changes early
   document.addEventListener("networkStatus", handleNetworkStatus);
+
+  // Add a listener for room joining to potentially force-show the start button
+  document.addEventListener("roomUpdate", (event) => {
+    console.log("[MAIN] Room update received:", event.detail);
+    // Wait a bit to ensure UI has updated
+    setTimeout(() => {
+      // Check if the start button should be visible
+      const startButton = document.getElementById("startGameOnlineButton");
+      if (startButton && startButton.classList.contains("hidden")) {
+        console.log(
+          "[MAIN] Start button is hidden, checking if it should be shown..."
+        );
+        // If it looks like we're the host, force-show the button
+        if (event.detail && event.detail.roomId) {
+          console.log(
+            "[MAIN] We have a room, trying to force-show start button"
+          );
+          forceStartGameButton();
+        }
+      }
+    }, 1000);
+  });
 
   console.log("DOM fully loaded and parsed. Initializing setup.");
 });

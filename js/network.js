@@ -9,6 +9,10 @@ let localPlayerId = null;
 let localPlayerIndex = -1;
 let assignedPlayerIndex = null;
 
+// Expose critical variables to window for debugging
+window.localPlayerIndex = localPlayerIndex;
+window.socket = socket;
+
 /**
  * Connects to the Socket.IO server.
  * @param {string} playerName - The name chosen by the player.
@@ -150,9 +154,13 @@ function setupListeners() {
 
   // --- Lobby/Room Listeners ---
   socket.on("assignPlayerData", (data) => {
-    console.log("Received player assignment:", data);
+    console.log("Received player assignment from server:", data);
     localPlayerId = data.playerId;
     localPlayerIndex = data.playerIndex;
+    window.localPlayerIndex = data.playerIndex; // Update global reference
+    console.log(
+      `Setting localPlayerIndex to ${data.playerIndex} (0 means host)`
+    );
     document.dispatchEvent(
       new CustomEvent("assignPlayer", {
         detail: { id: localPlayerId, index: localPlayerIndex },
@@ -162,6 +170,7 @@ function setupListeners() {
 
   socket.on("roomJoined", (data) => {
     console.log("Room joined/created:", data);
+    console.log(`Room joined with yourPlayerIndex=${data.yourPlayerIndex}`);
     // data should include { roomId, players, initialGameState, yourPlayerIndex }
     if (data.error) {
       console.error("Room join/create error:", data.error);
@@ -180,6 +189,11 @@ function setupListeners() {
       );
     }
     assignedPlayerIndex = data.yourPlayerIndex;
+    localPlayerIndex = data.yourPlayerIndex; // Make sure localPlayerIndex is also set
+    window.localPlayerIndex = data.yourPlayerIndex; // Update global reference
+    console.log(
+      `Updated both assignedPlayerIndex and localPlayerIndex to ${data.yourPlayerIndex}`
+    );
     gameState.roomId = data.roomId; // Set Room ID
     // Explicitly set players array after Object.assign
     if (data.players) {
@@ -191,7 +205,11 @@ function setupListeners() {
     // Dispatch event for UI to potentially update player list, etc.
     document.dispatchEvent(
       new CustomEvent("roomUpdate", {
-        detail: { roomId: data.roomId, players: data.players },
+        detail: {
+          roomId: data.roomId,
+          players: data.players,
+          playerIndex: localPlayerIndex,
+        },
       })
     );
   });

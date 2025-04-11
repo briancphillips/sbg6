@@ -116,6 +116,7 @@ export function initUI(elements) {
 function handleAssignPlayer(event) {
   localPlayerIndex = event.detail.index;
   console.log(`UI received player index assignment: ${localPlayerIndex}`);
+  console.log(`Full assignment details:`, event.detail);
   updateUI(); // Update UI now that we know the player index
 }
 
@@ -338,11 +339,16 @@ export function updateUI(mode = currentGameMode, localIdx = localPlayerIndex) {
 
   // Start Game Button Display (Host only, before game starts)
   if (startGameOnlineButtonEl) {
+    console.log(
+      `[Button Debug] localIdx=${localIdx}, gameStarted=${gameState.gameStarted}`
+    );
     if (localIdx === 0 && !gameState.gameStarted) {
+      console.log("[Button Debug] Should be showing the Start Game button");
       startGameOnlineButtonEl.classList.remove("hidden");
       startGameOnlineButtonEl.disabled = false; // Re-enable if it was disabled
       startGameOnlineButtonEl.textContent = "Start Online Game";
     } else {
+      console.log("[Button Debug] Should be hiding the Start Game button");
       startGameOnlineButtonEl.classList.add("hidden");
     }
   }
