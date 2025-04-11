@@ -1,6 +1,11 @@
 // server.js (Conceptual Example)
 const { Server } = require("socket.io");
 const http = require("http");
+const express = require("express"); // <<< ADDED
+const path = require("path"); // <<< ADDED
+
+// Create Express app
+const app = express(); // <<< ADDED
 
 // --- Enhanced logging setup ---
 function logWithTimestamp(type, message, data = null) {
@@ -27,69 +32,34 @@ for (const [name, interfaces] of Object.entries(networkInterfaces)) {
   }
 }
 
-// Create HTTP server and bind to all interfaces (0.0.0.0)
-const httpServer = http.createServer((req, res) => {
-  // Add request logging to see incoming connections
-  logWithTimestamp("HTTP", `${req.method} ${req.url} HTTP/${req.httpVersion}`);
+// Create HTTP server using the Express app <<<< MODIFIED
+const httpServer = http.createServer(app);
 
-  // Simple health check endpoint
-  if (req.url === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", time: new Date().toISOString() }));
-    return;
-  }
+// Basic request logging middleware
+app.use((req, res, next) => {
+  logWithTimestamp("HTTP", `${req.method} ${req.url}`);
+  next();
+});
 
-  // Socket.IO test page to verify connectivity
-  if (req.url === "/socket-test") {
-    res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Socket.IO Test</title>
-          <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-        </head>
-        <body>
-          <h1>Socket.IO Test Page</h1>
-          <div id="status">Connecting...</div>
-          <script>
-            document.getElementById('status').textContent = 'Attempting to connect...';
-            
-            // Log connection info
-            console.log('Page URL:', window.location.href);
-            console.log('Trying to connect to localhost:3000');
-            
-            // Direct connection to localhost:3000
-            const socket = io('http://localhost:3000', {
-              transports: ['websocket', 'polling'],
-              reconnectionAttempts: 3
-            });
-            
-            socket.on('connect', () => {
-              document.getElementById('status').textContent = 'Connected! Socket ID: ' + socket.id;
-              document.getElementById('status').style.color = 'green';
-            });
-            
-            socket.on('connect_error', (err) => {
-              document.getElementById('status').textContent = 'Connect Error: ' + err.message;
-              document.getElementById('status').style.color = 'red';
-              console.error('Connection Error:', err);
-            });
-            
-            socket.on('disconnect', (reason) => {
-              document.getElementById('status').textContent = 'Disconnected: ' + reason;
-              document.getElementById('status').style.color = 'orange';
-            });
-          </script>
-        </body>
-      </html>
-    `);
-    return;
-  }
+// Serve static files from the project root directory
+const rootDir = path.resolve(__dirname, "..", "..");
+logWithTimestamp("Static", `Serving static files from: ${rootDir}`);
+app.use(express.static(rootDir));
 
-  // For all other requests, return 404
-  res.writeHead(404);
-  res.end();
+// Default route to serve index.html for any other request (e.g., SPA routing)
+app.get("*", (req, res) => {
+  const indexPath = path.join(rootDir, "index.html");
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      logWithTimestamp(
+        "HTTP Error",
+        `Error sending index.html: ${err.message}`
+      );
+      if (!res.headersSent) {
+        res.status(500).send("Error serving index.html");
+      }
+    }
+  });
 });
 
 // Enhanced Socket.IO configuration with detailed logging
@@ -108,8 +78,9 @@ const io = new Server(httpServer, {
 });
 
 // Listen on multiple interfaces for better connectivity
-httpServer.listen(3000, "0.0.0.0", () => {
-  logWithTimestamp("Server", "Socket.IO server listening on 0.0.0.0:3000");
+httpServer.listen(8083, "0.0.0.0", () => {
+  // <<< CHANGED PORT to 8083
+  logWithTimestamp("Server", "Socket.IO server listening on 0.0.0.0:8083"); // <<< Updated log message
 
   // Log the environment
   logWithTimestamp("Server", "Environment details:", {
@@ -2286,4 +2257,4 @@ io.on("connection", (socket) => {
   });
 });
 
-console.log("Socket.IO server listening on port 3000");
+console.log("Socket.IO server listening on port 8083");
