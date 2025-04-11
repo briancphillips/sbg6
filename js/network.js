@@ -386,7 +386,7 @@ export function startGame() {
     return;
   }
   console.log("Requesting to start the game...");
-  socket.emit("startGame");
+  socket.emit("start_game");
 }
 
 /**
@@ -434,8 +434,8 @@ export function emitAction(actionType, payload = {}) {
 // Function for the host to request starting the game
 export function requestStartGame() {
   if (socket && socket.connected) {
-    console.log(`Emitting 'startGame' for room: ${gameState.roomId}`);
-    socket.emit("startGame", { roomId: gameState.roomId });
+    console.log(`Emitting 'start_game' for room: ${gameState.roomId}`);
+    socket.emit("start_game", { roomId: gameState.roomId });
   } else {
     console.error("Cannot start game: Socket not connected.");
   }
