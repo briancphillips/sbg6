@@ -1184,10 +1184,15 @@ io.on("connection", (socket) => {
     socket.join(roomId);
 
     // Tell creator their assigned index
-    socket.emit("assignPlayerData", {
+    const playerDataPayload = {
       playerId: socket.id,
       playerIndex: creatorPlayerIndex,
-    });
+    };
+    console.log(
+      `[Server] Emitting assignPlayerData to creator ${socket.id}:`,
+      playerDataPayload
+    ); // <<< ADD LOG
+    socket.emit("assignPlayerData", playerDataPayload);
 
     // Send initial room/game state back to creator
     // Send only the players part of the gameState initially
@@ -1275,10 +1280,16 @@ io.on("connection", (socket) => {
     );
 
     // Tell joining player their info
-    socket.emit("assignPlayerData", {
+    const playerDataPayloadJoin = {
+      // <<< Use different variable name
       playerId: socket.id,
       playerIndex: playerIndex,
-    });
+    };
+    console.log(
+      `[Server] Emitting assignPlayerData to joiner ${socket.id}:`,
+      playerDataPayloadJoin
+    ); // <<< ADD LOG
+    socket.emit("assignPlayerData", playerDataPayloadJoin);
 
     // Send current room/game state to joining player
     const roomDataForClient = {
