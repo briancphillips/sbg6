@@ -29,6 +29,7 @@ import {
   requestSorry,
   requestSwap,
   emitAction, // Generic action emitter
+  getLocalPlayerIndex, // <<< Import the new getter
 } from "./network.js"; // Import network request functions
 
 // Element references
@@ -54,7 +55,7 @@ let scenarioButtons = [];
 
 // UI State
 let currentGameMode = "local"; // Track current game mode ('local' or 'online')
-let localPlayerIndex = -1; // Track the index assigned to the local player in online mode
+let currentLocalPlayerIndex = -1; // Track the index assigned to the local player in online mode
 
 // Initialize UI elements
 export function initUI(elements) {
@@ -92,8 +93,14 @@ export function initUI(elements) {
     console.warn("Skip turn button element not passed to initUI.");
   }
 
+  // Get the initial player index in case the event was missed
+  currentLocalPlayerIndex = getLocalPlayerIndex(); // <<< Get index on init
+  console.log(
+    `[UI Init] Initial local player index from network: ${currentLocalPlayerIndex}`
+  );
+
   // Add listeners for events dispatched by network.js
-  document.addEventListener("assignPlayer", handleAssignPlayer);
+  document.addEventListener("playerDataAssigned", handlePlayerDataAssigned);
   document.addEventListener("gameStateUpdate", handleGameStateUpdate);
   document.addEventListener("roomUpdate", handleRoomUpdate);
   document.addEventListener("turnStart", handleTurnStart);
@@ -113,11 +120,16 @@ export function initUI(elements) {
 }
 
 // --- Event Handlers for Network Events ---
-function handleAssignPlayer(event) {
-  localPlayerIndex = event.detail.index;
-  console.log(`UI received player index assignment: ${localPlayerIndex}`);
-  console.log(`Full assignment details:`, event.detail);
-  updateUI(); // Update UI now that we know the player index
+function handlePlayerDataAssigned(event) {
+  if (event.detail && event.detail.index !== undefined) {
+    currentLocalPlayerIndex = event.detail.index;
+    console.log(
+      `UI received player index assignment: ${currentLocalPlayerIndex}`
+    );
+    updateUI(); // Update UI now that we know the player index
+  } else {
+    console.error("UI received invalid playerDataAssigned event", event.detail);
+  }
 }
 
 function handleGameStateUpdate(event) {
@@ -230,9 +242,12 @@ function initScenarioManagerUI() {
 /**
  * Update UI elements based on game state, mode, and local player index.
  * @param {string} [mode=currentGameMode] - The current game mode ('local' or 'online').
- * @param {number} [localIdx=localPlayerIndex] - The index of the local player (defaults to module state).
+ * @param {number} [localIdx=currentLocalPlayerIndex] - The index of the local player (defaults to module state).
  */
-export function updateUI(mode = currentGameMode, localIdx = localPlayerIndex) {
+export function updateUI(
+  mode = currentGameMode,
+  localIdx = currentLocalPlayerIndex
+) {
   console.log(`--- updateUI called ---`);
   console.log(`  Mode: ${mode}, Local Index: ${localIdx}`);
   console.log(
@@ -385,9 +400,9 @@ function updatePlayerList(players) {
       li.style.color = color;
       // Use determined name, indicate if it's the local player
       li.textContent = `${name} (${
-        playerIdx === localPlayerIndex ? "You" : "Remote"
+        playerIdx === currentLocalPlayerIndex ? "You" : "Remote"
       })`;
-      if (playerIdx === localPlayerIndex) {
+      if (playerIdx === currentLocalPlayerIndex) {
         li.style.fontWeight = "bold";
       }
       if (playerIdx === gameState.currentPlayerIndex) {
@@ -407,7 +422,7 @@ function handleDrawCardButtonClick() {
 
   if (currentGameMode === "online") {
     // Check if it's actually our turn (belt and braces)
-    if (gameState.currentPlayerIndex === localPlayerIndex) {
+    if (gameState.currentPlayerIndex === currentLocalPlayerIndex) {
       // console.log("Requesting draw card from server...");
       requestDrawCard();
       // Disable button immediately to prevent double clicks, UI update will confirm
@@ -820,7 +835,7 @@ export function executeLocalPawnSelection(playerIndex, pawn) {
 // In Local mode, executes the move (or part of it for split 7)
 export function performMoveSelection(move) {
   if (currentGameMode === "online") {
-    if (gameState.currentPlayerIndex === localPlayerIndex) {
+    if (gameState.currentPlayerIndex === currentLocalPlayerIndex) {
       console.log(
         `[UI->Net] Requesting selectMove. State: ${gameState.currentAction}, Move:`,
         JSON.stringify(move)
@@ -893,7 +908,7 @@ export function performMoveSelection(move) {
       // Check if turn already advanced by executeMove (shouldn't happen now)
       // or if game ended
       if (
-        gameState.currentPlayerIndex === localPlayerIndex &&
+        gameState.currentPlayerIndex === currentLocalPlayerIndex &&
         !gameState.gameOver
       ) {
         const remainingValue = 7 - moveValue;
@@ -908,7 +923,7 @@ export function performMoveSelection(move) {
           // console.log("Split-7: Finding other pawns for second move...");
 
           // Find OTHER selectable pawns for the second move
-          gameState.players[localPlayerIndex].pawns.forEach((pawn) => {
+          gameState.players[currentLocalPlayerIndex].pawns.forEach((pawn) => {
             // console.log(
             //   `  - Checking Pawn ID ${pawn.id} (Type: ${pawn.positionType})`
             // );
@@ -997,12 +1012,12 @@ function handleCanvasClick(event) {
   // --- Online Mode Turn Check ---
   // *** ADD LOGGING HERE ***
   console.log(
-    `[TurnCheck Debug] CurrentPlayerIndex: ${gameState.currentPlayerIndex}, LocalPlayerIndex: ${localPlayerIndex}`
+    `[TurnCheck Debug] CurrentPlayerIndex: ${gameState.currentPlayerIndex}, LocalPlayerIndex: ${currentLocalPlayerIndex}`
   );
   // **************************
   if (
     currentGameMode === "online" &&
-    gameState.currentPlayerIndex !== localPlayerIndex
+    gameState.currentPlayerIndex !== currentLocalPlayerIndex
   ) {
     console.log("Canvas clicked, but it's not your turn (Online).");
     return; // Ignore clicks if it's not the local player's turn online
@@ -1227,7 +1242,7 @@ function skipTurnAction() {
   } else if (currentGameMode === "online") {
     // In online mode, only allow skip if it's your turn
     if (
-      gameState.currentPlayerIndex === localPlayerIndex &&
+      gameState.currentPlayerIndex === currentLocalPlayerIndex &&
       !gameState.gameOver
     ) {
       // console.log("Requesting skip turn from server...");

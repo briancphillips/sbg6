@@ -9,9 +9,10 @@ let localPlayerId = null;
 let localPlayerIndex = -1;
 let assignedPlayerIndex = null;
 
-// Expose critical variables to window for debugging
-window.localPlayerIndex = localPlayerIndex;
-window.socket = socket;
+// Getter function for other modules to access the index
+export function getLocalPlayerIndex() {
+  return localPlayerIndex;
+}
 
 /**
  * Connects to the Socket.IO server.
@@ -160,10 +161,10 @@ function setupListeners() {
       console.log(
         `[Network] Player data assigned: ID=${localPlayerId}, Index=${localPlayerIndex}`
       );
-      // Optionally, trigger an immediate UI update or state sync
+      // Dispatch event with the assigned index
       document.dispatchEvent(
         new CustomEvent("playerDataAssigned", {
-          detail: { index: localPlayerIndex },
+          detail: { index: localPlayerIndex }, // Send the index here
         })
       );
     } else {
@@ -191,12 +192,6 @@ function setupListeners() {
         })
       );
     }
-    assignedPlayerIndex = data.yourPlayerIndex;
-    localPlayerIndex = data.yourPlayerIndex; // Make sure localPlayerIndex is also set
-    window.localPlayerIndex = data.yourPlayerIndex; // Update global reference
-    console.log(
-      `Updated both assignedPlayerIndex and localPlayerIndex to ${data.yourPlayerIndex}`
-    );
     gameState.roomId = data.roomId; // Set Room ID
     // Explicitly set players array after Object.assign
     if (data.players) {
